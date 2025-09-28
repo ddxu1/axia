@@ -183,6 +183,58 @@ export class GmailService {
     }
   }
 
+  async sendEmail(to: string, subject: string, htmlBody: string, plainTextBody?: string): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      // Create the email message
+      const emailLines = [
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="boundary"',
+        '',
+        '--boundary',
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        plainTextBody || this.stripHtml(htmlBody),
+        '',
+        '--boundary',
+        'Content-Type: text/html; charset=UTF-8',
+        '',
+        htmlBody,
+        '',
+        '--boundary--'
+      ]
+
+      const email = emailLines.join('\n')
+      const encodedEmail = Buffer.from(email).toString('base64url')
+
+      await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedEmail
+        }
+      })
+
+      return true
+    } catch (error) {
+      console.error('Error sending email:', error)
+      return false
+    }
+  }
+
+  private stripHtml(html: string): string {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+  }
+
   private async getEmailDetail(messageId: string): Promise<Email | null> {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
 

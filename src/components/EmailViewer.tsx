@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Email } from '@/types/email'
 import LabelManager from './LabelManager'
+import ComposeEmail from './ComposeEmail'
 
 interface EmailViewerProps {
   email: Email | null
@@ -14,6 +15,7 @@ interface EmailViewerProps {
 export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEmailArchive }: EmailViewerProps) {
   const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
   const [showLabelManager, setShowLabelManager] = useState(false)
+  const [showCompose, setShowCompose] = useState(false)
 
   const handleMarkAsRead = async (markAsRead: boolean) => {
     if (!email) return
@@ -164,7 +166,10 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
       <div className="border-t border-glass p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
+            <button
+              onClick={() => setShowCompose(true)}
+              className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
@@ -244,6 +249,18 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
           currentLabels={email.labels}
           onLabelsUpdate={handleLabelsUpdate}
           onClose={() => setShowLabelManager(false)}
+        />
+      )}
+
+      {/* Compose Reply Modal */}
+      {showCompose && (
+        <ComposeEmail
+          replyTo={{
+            email: email.from.replace(/.*<(.+)>.*/, '$1').trim() || email.from,
+            subject: email.subject,
+            body: email.body || email.snippet
+          }}
+          onClose={() => setShowCompose(false)}
         />
       )}
     </div>
