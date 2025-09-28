@@ -106,40 +106,55 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        <div className="relative z-10 container mx-auto px-4 py-24">
-          <div className="text-center max-w-2xl mx-auto">
-            <div className="glass-card rounded-3xl p-12 hover-lift">
-              <div className="w-24 h-24 liquid-gradient rounded-full mx-auto mb-8 flex items-center justify-center">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-4">
+          <div className="text-center max-w-4xl mx-auto">
+            <h1 className="text-7xl md:text-8xl font-light text-white mb-6 tracking-tight">
+              Email that
+              <span className="block font-medium bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                just works
+              </span>
+            </h1>
+
+            <p className="text-xl md:text-2xl text-gray-400 mb-12 max-w-2xl mx-auto font-light leading-relaxed">
+              A clean, fast email client built for productivity.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+              <AuthButton />
+              <button type="button" className="text-gray-400 hover:text-white transition-colors text-lg font-medium">
+                Learn more →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto text-left">
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-white font-medium">Secure</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">OAuth authentication keeps your account safe</p>
               </div>
-              <h2 className="text-4xl font-bold text-glass mb-6 bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
-                Welcome to the Future
-              </h2>
-              <p className="text-lg text-glass-dark mb-8 leading-relaxed">
-                Experience email management like never before with our liquid glass interface.
-                Connect your Gmail and dive into a world of seamless communication.
-              </p>
-              <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-2 text-glass-dark">
-                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span>Secure OAuth Authentication</span>
                 </div>
-                <div className="flex items-center justify-center space-x-2 text-glass-dark">
-                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                <h3 className="text-white font-medium">Fast</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">Real-time sync with your Gmail account</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
-                  <span>Real-time Email Sync</span>
                 </div>
-                <div className="flex items-center justify-center space-x-2 text-glass-dark">
-                  <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  <span>Beautiful Liquid Glass UI</span>
-                </div>
+                <h3 className="text-white font-medium">Simple</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">Clean interface focused on what matters</p>
               </div>
             </div>
           </div>
