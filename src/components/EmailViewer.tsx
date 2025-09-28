@@ -16,6 +16,7 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
   const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
   const [showLabelManager, setShowLabelManager] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
+  const [showForward, setShowForward] = useState(false)
 
   const handleMarkAsRead = async (markAsRead: boolean) => {
     if (!email) return
@@ -175,7 +176,10 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
               </svg>
               <span>Reply</span>
             </button>
-            <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
+            <button
+              onClick={() => setShowForward(true)}
+              className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
               </svg>
@@ -261,6 +265,19 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
             body: email.body || email.snippet
           }}
           onClose={() => setShowCompose(false)}
+        />
+      )}
+
+      {/* Compose Forward Modal */}
+      {showForward && (
+        <ComposeEmail
+          replyTo={{
+            email: '',
+            subject: `Fwd: ${email.subject}`,
+            body: `<br><br>---------- Forwarded message ----------<br>From: ${email.from}<br>Date: ${new Date(email.date).toLocaleString()}<br>Subject: ${email.subject}<br>To: ${email.to.join(', ')}<br><br>${email.body || email.snippet}`
+          }}
+          isForward={true}
+          onClose={() => setShowForward(false)}
         />
       )}
     </div>

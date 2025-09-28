@@ -10,12 +10,13 @@ interface ComposeEmailProps {
     subject: string
     body?: string
   }
+  isForward?: boolean
 }
 
-export default function ComposeEmail({ onClose, replyTo }: ComposeEmailProps) {
+export default function ComposeEmail({ onClose, replyTo, isForward }: ComposeEmailProps) {
   const [to, setTo] = useState(replyTo?.email || '')
-  const [subject, setSubject] = useState(replyTo?.subject ? `Re: ${replyTo.subject}` : '')
-  const [body, setBody] = useState(replyTo?.body ? `<br><br><blockquote style="border-left: 3px solid #ccc; padding-left: 12px; margin: 0;">${replyTo.body}</blockquote>` : '')
+  const [subject, setSubject] = useState(replyTo?.subject || '')
+  const [body, setBody] = useState(replyTo?.body || '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,7 +72,7 @@ export default function ComposeEmail({ onClose, replyTo }: ComposeEmailProps) {
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-glass">
           <h2 className="text-xl font-semibold text-glass">
-            {replyTo ? 'Reply' : 'Compose Email'}
+            {isForward ? 'Forward Email' : replyTo ? 'Reply' : 'Compose Email'}
           </h2>
           <button
             onClick={onClose}
