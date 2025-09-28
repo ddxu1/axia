@@ -6,11 +6,13 @@ import { Email } from '@/types/email'
 
 interface EmailListProps {
   onEmailSelect: (email: Email) => void
+  emails?: Email[]
+  onEmailsUpdate?: (emails: Email[]) => void
 }
 
-export default function EmailList({ onEmailSelect }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate }: EmailListProps) {
   const { data: session } = useSession()
-  const [emails, setEmails] = useState<Email[]>([])
+  const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,6 +23,12 @@ export default function EmailList({ onEmailSelect }: EmailListProps) {
     }
   }, [session])
 
+  useEffect(() => {
+    if (propEmails) {
+      setEmails(propEmails)
+    }
+  }, [propEmails])
+
   const fetchEmails = async () => {
     try {
       setLoading(true)
@@ -30,6 +38,7 @@ export default function EmailList({ onEmailSelect }: EmailListProps) {
       }
       const data = await response.json()
       setEmails(data.emails)
+      onEmailsUpdate?.(data.emails)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -37,9 +46,34 @@ export default function EmailList({ onEmailSelect }: EmailListProps) {
     }
   }
 
-  const handleEmailSelect = (email: Email) => {
+  const handleEmailSelect = async (email: Email) => {
     setSelectedId(email.id)
     onEmailSelect(email)
+
+    // Automatically mark as read when selected
+    if (!email.isRead) {
+      try {
+        const response = await fetch(`/api/emails/${email.id}/mark-read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isRead: true })
+        })
+
+        if (response.ok) {
+          // Update local state
+          const updatedEmails = emails.map(e =>
+            e.id === email.id ? { ...e, isRead: true } : e
+          )
+          setEmails(updatedEmails)
+          onEmailsUpdate?.(updatedEmails)
+
+          // Update the selected email
+          onEmailSelect({ ...email, isRead: true })
+        }
+      } catch (error) {
+        console.error('Error marking email as read:', error)
+      }
+    }
   }
 
   if (loading) {

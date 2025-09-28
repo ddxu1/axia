@@ -43,6 +43,69 @@ export class GmailService {
     }
   }
 
+  async deleteEmail(messageId: string): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      // Move to trash instead of permanent delete (more Gmail-like)
+      await gmail.users.messages.trash({
+        userId: 'me',
+        id: messageId
+      })
+      return true
+    } catch (error) {
+      console.error('Error moving email to trash:', error)
+
+      // Fallback: try permanent delete if trash fails
+      try {
+        await gmail.users.messages.delete({
+          userId: 'me',
+          id: messageId
+        })
+        return true
+      } catch (deleteError) {
+        console.error('Error permanently deleting email:', deleteError)
+        return false
+      }
+    }
+  }
+
+  async markAsRead(messageId: string): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          removeLabelIds: ['UNREAD']
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Error marking email as read:', error)
+      return false
+    }
+  }
+
+  async markAsUnread(messageId: string): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          addLabelIds: ['UNREAD']
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Error marking email as unread:', error)
+      return false
+    }
+  }
+
   private async getEmailDetail(messageId: string): Promise<Email | null> {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
 

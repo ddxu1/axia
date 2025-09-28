@@ -10,6 +10,29 @@ import { Email } from '@/types/email'
 export default function Home() {
   const { data: session } = useSession()
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null)
+  const [emails, setEmails] = useState<Email[]>([])
+
+  const handleEmailUpdate = (emailId: string, updates: Partial<Email>) => {
+    setEmails(prevEmails =>
+      prevEmails.map(email =>
+        email.id === emailId ? { ...email, ...updates } : email
+      )
+    )
+
+    // Update selected email if it's the one being updated
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(prev => prev ? { ...prev, ...updates } : null)
+    }
+  }
+
+  const handleEmailDelete = (emailId: string) => {
+    setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))
+
+    // Clear selected email if it's the one being deleted
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(null)
+    }
+  }
 
   return (
     <main className="min-h-screen relative overflow-hidden">
@@ -48,12 +71,20 @@ export default function Home() {
         <div className="relative z-10 flex h-[calc(100vh-61px)] p-4 gap-4">
           {/* Email List Sidebar */}
           <div className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift">
-            <EmailList onEmailSelect={setSelectedEmail} />
+            <EmailList
+              onEmailSelect={setSelectedEmail}
+              emails={emails}
+              onEmailsUpdate={setEmails}
+            />
           </div>
 
           {/* Email Viewer */}
           <div className="flex-1 glass-card rounded-2xl overflow-hidden hover-lift">
-            <EmailViewer email={selectedEmail} />
+            <EmailViewer
+              email={selectedEmail}
+              onEmailUpdate={handleEmailUpdate}
+              onEmailDelete={handleEmailDelete}
+            />
           </div>
         </div>
       ) : (

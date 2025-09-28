@@ -1,12 +1,66 @@
 'use client'
 
+import { useState } from 'react'
 import { Email } from '@/types/email'
 
 interface EmailViewerProps {
   email: Email | null
+  onEmailUpdate?: (emailId: string, updates: Partial<Email>) => void
+  onEmailDelete?: (emailId: string) => void
 }
 
-export default function EmailViewer({ email }: EmailViewerProps) {
+export default function EmailViewer({ email, onEmailUpdate, onEmailDelete }: EmailViewerProps) {
+  const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
+
+  const handleMarkAsRead = async (markAsRead: boolean) => {
+    if (!email) return
+
+    setIsLoading(prev => ({ ...prev, read: true }))
+    try {
+      const response = await fetch(`/api/emails/${email.id}/mark-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRead: markAsRead })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update email status')
+      }
+
+      onEmailUpdate?.(email.id, { isRead: markAsRead })
+    } catch (error) {
+      console.error('Error updating email:', error)
+      alert('Failed to update email status')
+    } finally {
+      setIsLoading(prev => ({ ...prev, read: false }))
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!email) return
+
+    if (!confirm('Are you sure you want to delete this email? This action cannot be undone.')) {
+      return
+    }
+
+    setIsLoading(prev => ({ ...prev, delete: true }))
+    try {
+      const response = await fetch(`/api/emails/${email.id}/delete`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete email')
+      }
+
+      onEmailDelete?.(email.id)
+    } catch (error) {
+      console.error('Error deleting email:', error)
+      alert('Failed to delete email')
+    } finally {
+      setIsLoading(prev => ({ ...prev, delete: false }))
+    }
+  }
   if (!email) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -79,25 +133,53 @@ export default function EmailViewer({ email }: EmailViewerProps) {
 
       {/* Action Bar */}
       <div className="border-t border-glass p-4">
-        <div className="flex items-center space-x-3">
-          <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-            </svg>
-            <span>Reply</span>
-          </button>
-          <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-            </svg>
-            <span>Forward</span>
-          </button>
-          <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span>Delete</span>
-          </button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+              <span>Reply</span>
+            </button>
+            <button className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+              </svg>
+              <span>Forward</span>
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => handleMarkAsRead(!email.isRead)}
+              disabled={isLoading.read}
+              className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2 disabled:opacity-50"
+            >
+              {isLoading.read ? (
+                <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={email.isRead ? "M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v18" : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"} />
+                </svg>
+              )}
+              <span>{email.isRead ? 'Mark Unread' : 'Mark Read'}</span>
+            </button>
+
+            <button
+              onClick={handleDelete}
+              disabled={isLoading.delete}
+              className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2 disabled:opacity-50 hover:bg-red-500/20"
+            >
+              {isLoading.delete ? (
+                <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+              <span>Delete</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
