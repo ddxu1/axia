@@ -106,6 +106,83 @@ export class GmailService {
     }
   }
 
+  async archiveEmail(messageId: string): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          removeLabelIds: ['INBOX']
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Error archiving email:', error)
+      return false
+    }
+  }
+
+  async addLabelsToEmail(messageId: string, labelIds: string[]): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          addLabelIds: labelIds
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Error adding labels to email:', error)
+      return false
+    }
+  }
+
+  async removeLabelsFromEmail(messageId: string, labelIds: string[]): Promise<boolean> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          removeLabelIds: labelIds
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Error removing labels from email:', error)
+      return false
+    }
+  }
+
+  async getLabels(): Promise<Array<{id: string, name: string, type: string}>> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      const response = await gmail.users.labels.list({
+        userId: 'me'
+      })
+
+      return (response.data.labels || []).map(label => ({
+        id: label.id || '',
+        name: label.name || '',
+        type: label.type || ''
+      })).filter(label =>
+        // Filter out system labels and show user labels and important system ones
+        label.type === 'user' ||
+        ['IMPORTANT', 'STARRED', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(label.id)
+      )
+    } catch (error) {
+      console.error('Error fetching labels:', error)
+      return []
+    }
+  }
+
   private async getEmailDetail(messageId: string): Promise<Email | null> {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
 

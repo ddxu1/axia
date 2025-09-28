@@ -34,6 +34,15 @@ export default function Home() {
     }
   }
 
+  const handleEmailArchive = (emailId: string) => {
+    setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))
+
+    // Clear selected email if it's the one being archived
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(null)
+    }
+  }
+
   return (
     <main className="min-h-screen relative overflow-hidden">
 
@@ -78,6 +87,7 @@ export default function Home() {
               email={selectedEmail}
               onEmailUpdate={handleEmailUpdate}
               onEmailDelete={handleEmailDelete}
+              onEmailArchive={handleEmailArchive}
             />
           </div>
         </div>
