@@ -45,10 +45,6 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
   const handleDelete = async () => {
     if (!email) return
 
-    if (!confirm('Are you sure you want to delete this email? This action cannot be undone.')) {
-      return
-    }
-
     setIsLoading(prev => ({ ...prev, delete: true }))
     try {
       const response = await fetch(`/api/emails/${email.id}/delete`, {

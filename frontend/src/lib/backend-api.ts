@@ -144,7 +144,7 @@ class BackendApiClient {
    * Delete email
    */
   async deleteEmail(emailId: number): Promise<void> {
-    await this.request(`/emails/${emailId}/delete`, {
+    await this.request(`/emails/${emailId}`, {
       method: 'DELETE',
     })
   }

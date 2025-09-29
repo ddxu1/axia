@@ -72,6 +72,18 @@ class EmailService:
         # TODO: Also mark as read in Gmail via API
         return True
 
+    async def mark_as_unread(self, email_id: int, user_id: int) -> bool:
+        """Mark an email as unread"""
+        email = await self.get_user_email(email_id, user_id)
+        if not email:
+            return False
+
+        email.is_read = False
+        self.db.commit()
+
+        # TODO: Also mark as unread in Gmail via API
+        return True
+
     async def delete_email(self, email_id: int, user_id: int) -> bool:
         """Delete an email (move to trash)"""
         email = await self.get_user_email(email_id, user_id)

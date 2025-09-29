@@ -8,9 +8,13 @@ from models.user import User
 from models.email import Email
 from sync_worker import GmailSyncWorker
 from typing import Optional
+from pydantic import BaseModel
 import asyncio
 
 router = APIRouter(prefix="/emails", tags=["emails"])
+
+class MarkReadRequest(BaseModel):
+    is_read: bool = True
 
 @router.get("/", response_model=EmailList)
 async def get_emails(
@@ -71,18 +75,22 @@ async def get_email(
 
     return EmailResponse.from_orm(email)
 
-@router.post("/{email_id}/read")
+@router.post("/{email_id}/mark-read")
 async def mark_email_read(
     email_id: int,
+    request: MarkReadRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Mark an email as read
+    Mark an email as read/unread
     """
     email_service = EmailService(db)
 
-    success = await email_service.mark_as_read(email_id, current_user.id)
+    if request.is_read:
+        success = await email_service.mark_as_read(email_id, current_user.id)
+    else:
+        success = await email_service.mark_as_unread(email_id, current_user.id)
 
     if not success:
         raise HTTPException(
@@ -90,7 +98,7 @@ async def mark_email_read(
             detail="Email not found"
         )
 
-    return {"message": "Email marked as read"}
+    return {"message": f"Email marked as {'read' if request.is_read else 'unread'}"}
 
 @router.delete("/{email_id}")
 async def delete_email(

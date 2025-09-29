@@ -128,6 +128,7 @@ export default function Home() {
           <div className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift">
             <EmailList
               onEmailSelect={setSelectedEmail}
+              emails={emails}
               onEmailsUpdate={setEmails}
               searchQuery={searchQuery}
             />
