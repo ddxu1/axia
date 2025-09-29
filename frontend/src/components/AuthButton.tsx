@@ -1,31 +1,129 @@
 'use client'
 
-import { useSession, signIn, signOut } from 'next-auth/react'
+import { signIn } from 'next-auth/react'
+import { useState } from 'react'
+import { useAccountSwitcher } from '@/hooks/useAccountSwitcher'
 
 interface AuthButtonProps {
   buttonText?: string
 }
 
 export default function AuthButton({ buttonText = "Get started" }: AuthButtonProps) {
-  const { data: session } = useSession()
+  const { session, switchAccount, signOutCompletely, isSwitching } = useAccountSwitcher()
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  const handleSwitchAccount = async () => {
+    setShowDropdown(false)
+    await switchAccount()
+  }
+
+  const handleSignOut = () => {
+    setShowDropdown(false)
+    signOutCompletely()
+  }
 
   if (session) {
     return (
-      <button
-        onClick={() => signOut()}
-        className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg"
-        title="Sign out"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-      </button>
+      <div className="relative">
+        <button
+          onClick={() => setShowDropdown(!showDropdown)}
+          className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors p-2 rounded-lg"
+          title="Account options"
+        >
+          {session.user?.image ? (
+            <img
+              src={session.user.image}
+              alt="Profile"
+              className="w-6 h-6 rounded-full"
+            />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
+              <span className="text-xs text-white">
+                {session.user?.name?.charAt(0) || session.user?.email?.charAt(0)}
+              </span>
+            </div>
+          )}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showDropdown && (
+          <>
+            {/* Backdrop to close dropdown */}
+            <div
+              className="fixed inset-0 z-50"
+              onClick={() => setShowDropdown(false)}
+            />
+
+            {/* Dropdown menu */}
+            <div className="absolute right-0 mt-2 w-64 bg-black/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl z-50">
+              <div className="p-4 border-b border-white/10">
+                <div className="flex items-center space-x-3">
+                  {session.user?.image ? (
+                    <img
+                      src={session.user.image}
+                      alt="Profile"
+                      className="w-10 h-10 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center">
+                      <span className="text-sm text-white">
+                        {session.user?.name?.charAt(0) || session.user?.email?.charAt(0)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">
+                      {session.user?.name || 'User'}
+                    </p>
+                    <p className="text-gray-400 text-sm truncate">
+                      {session.user?.email}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-2">
+                <button
+                  onClick={handleSwitchAccount}
+                  disabled={isSwitching}
+                  className="w-full flex items-center space-x-3 px-3 py-2 text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSwitching ? (
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                  )}
+                  <span>{isSwitching ? 'Switching...' : 'Switch Google Account'}</span>
+                </button>
+
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center space-x-3 px-3 py-2 text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     )
+  }
+
+  const handleSignIn = () => {
+    signIn('google')
   }
 
   return (
     <button
-      onClick={() => signIn('google')}
+      onClick={handleSignIn}
       className="bg-white text-black font-medium py-2 px-6 rounded-full hover:bg-gray-100 transition-colors flex items-center space-x-2 text-base"
     >
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

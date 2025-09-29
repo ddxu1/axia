@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, or_, desc, func, String
 from models.email import Email
 from models.user import User
 from typing import List, Tuple, Optional
@@ -38,7 +38,7 @@ class EmailService:
             )
 
         if label:
-            query = query.filter(Email.labels.contains([label]))
+            query = query.filter(func.cast(Email.labels, String).like(f'%"{label}"%'))
 
         if is_read is not None:
             query = query.filter(Email.is_read == is_read)

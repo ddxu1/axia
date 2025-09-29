@@ -6,6 +6,7 @@ import AuthButton from '@/components/AuthButton'
 import EmailList from '@/components/EmailList'
 import EmailViewer from '@/components/EmailViewer'
 import ComposeEmail from '@/components/ComposeEmail'
+import FilterSidebar from '@/components/FilterSidebar'
 import Footer from '@/components/Footer'
 import { Email } from '@/types/email'
 
@@ -15,6 +16,37 @@ export default function Home() {
   const [emails, setEmails] = useState<Email[]>([])
   const [showCompose, setShowCompose] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedFilter, setSelectedFilter] = useState('all')
+  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({})
+
+  // Fetch email counts
+  const fetchEmailCounts = async () => {
+    if (session) {
+      try {
+        const response = await fetch('/api/emails/counts')
+        if (response.ok) {
+          const counts = await response.json()
+          setEmailCounts(counts)
+        }
+      } catch (error) {
+        console.error('Failed to fetch email counts:', error)
+      }
+    }
+  }
+
+  useEffect(() => {
+    fetchEmailCounts()
+
+    // Refresh counts every 30 seconds
+    const interval = setInterval(fetchEmailCounts, 30000)
+    return () => clearInterval(interval)
+  }, [session])
+
+  const handleRefresh = () => {
+    fetchEmailCounts()
+    // Force EmailList to refresh by clearing and refetching emails
+    setEmails([])
+  }
 
   const handleEmailUpdate = (emailId: string, updates: Partial<Email>) => {
     setEmails(prevEmails =>
@@ -51,7 +83,7 @@ export default function Home() {
     <main className="min-h-screen relative overflow-hidden">
 
       {/* Header */}
-      <div className="relative z-10 glass border-0 border-b border-glass">
+      <div className="relative z-20 glass border-0 border-b border-glass">
         <div className="px-4 py-3 grid grid-cols-3 items-center">
           {/* Left side - User email or logo */}
           <div className="flex items-center">
@@ -101,7 +133,7 @@ export default function Home() {
               <>
                 <button
                   onClick={() => setShowCompose(true)}
-                  className="glass-button text-glass px-4 py-2 rounded-full hover:scale-105 transition-all duration-300 flex items-center space-x-2"
+                  className="glass-button text-glass px-4 py-2 rounded-full transition-all duration-300 flex items-center space-x-2"
                   title="Compose Email"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,7 +141,7 @@ export default function Home() {
                   </svg>
                   <span className="hidden sm:inline">Compose</span>
                 </button>
-                <button className="glass-button text-glass p-2 rounded-full hover:scale-105 transition-all duration-300">
+                <button className="glass-button text-glass p-2 rounded-full transition-all duration-300">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -124,6 +156,16 @@ export default function Home() {
 
       {session ? (
         <div className="relative z-10 flex h-[calc(100vh-61px)] p-4 gap-4">
+          {/* Filter Sidebar */}
+          <div className="w-64 flex-shrink-0">
+            <FilterSidebar
+              selectedFilter={selectedFilter}
+              onFilterChange={setSelectedFilter}
+              emailCounts={emailCounts}
+              onRefresh={handleRefresh}
+            />
+          </div>
+
           {/* Email List Sidebar */}
           <div className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift">
             <EmailList
@@ -131,6 +173,7 @@ export default function Home() {
               emails={emails}
               onEmailsUpdate={setEmails}
               searchQuery={searchQuery}
+              selectedFilter={selectedFilter}
             />
           </div>
 

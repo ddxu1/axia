@@ -43,9 +43,10 @@ interface EmailListProps {
   emails?: Email[]
   onEmailsUpdate?: (emails: Email[]) => void
   searchQuery?: string
+  selectedFilter?: string
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -58,10 +59,11 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
   const [hasMoreEmails, setHasMoreEmails] = useState(true)
   const [currentSearchQuery, setCurrentSearchQuery] = useState<string>('')
   const [searchLoading, setSearchLoading] = useState(false)
+  const [currentFilter, setCurrentFilter] = useState<string>('all')
 
   useEffect(() => {
     if (session) {
-      fetchEmails()
+      fetchEmails(1, false, undefined, currentFilter)
     }
   }, [session])
 
@@ -80,15 +82,51 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
           // Reset pagination and fetch new results
           setCurrentPage(1)
           setHasMoreEmails(true)
-          fetchEmails(1, false, searchQuery || undefined)
+          fetchEmails(1, false, searchQuery || undefined, currentFilter)
         }
       }, 300) // 300ms debounce
 
       return () => clearTimeout(timeoutId)
     }
-  }, [searchQuery, currentSearchQuery, session])
+  }, [searchQuery, currentSearchQuery, session, currentFilter])
 
-  const fetchEmails = async (page: number = 1, append: boolean = false, search?: string) => {
+  // Filter change effect
+  useEffect(() => {
+    if (selectedFilter !== currentFilter) {
+      if (session) {
+        setCurrentFilter(selectedFilter || 'all')
+        // Reset pagination and fetch new results
+        setCurrentPage(1)
+        setHasMoreEmails(true)
+        fetchEmails(1, false, currentSearchQuery || undefined, selectedFilter || 'all')
+      }
+    }
+  }, [selectedFilter, currentFilter, session, currentSearchQuery])
+
+  const mapFilterToLabel = (filter: string): string | undefined => {
+    switch (filter) {
+      case 'all':
+        return undefined
+      case 'inbox':
+        return 'INBOX'
+      case 'important':
+        return 'IMPORTANT'
+      case 'starred':
+        return 'STARRED'
+      case 'sent':
+        return 'SENT'
+      case 'personal':
+        return 'CATEGORY_PERSONAL'
+      case 'updates':
+        return 'CATEGORY_UPDATES'
+      case 'promotions':
+        return 'CATEGORY_PROMOTIONS'
+      default:
+        return undefined
+    }
+  }
+
+  const fetchEmails = async (page: number = 1, append: boolean = false, search?: string, filter?: string) => {
     try {
       if (!append) {
         if (search) setSearchLoading(true)
@@ -105,6 +143,16 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
 
       if (search) {
         params.append('search', search)
+      }
+
+      const labelFilter = mapFilterToLabel(filter || currentFilter)
+      if (labelFilter) {
+        params.append('label', labelFilter)
+      }
+
+      // Special handling for unread filter
+      if (filter === 'unread' || currentFilter === 'unread') {
+        params.append('is_read', 'false')
       }
 
       const response = await fetch(`/api/emails?${params}`)
@@ -138,7 +186,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
 
   const loadMoreEmails = async () => {
     const nextPage = currentPage + 1
-    await fetchEmails(nextPage, true, currentSearchQuery || undefined)
+    await fetchEmails(nextPage, true, currentSearchQuery || undefined, currentFilter)
     setCurrentPage(nextPage)
   }
 
@@ -161,7 +209,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
 
       // Wait a moment for sync to process, then fetch updated emails
       setTimeout(async () => {
-        await fetchEmails(1, false) // Reset to first page after sync
+        await fetchEmails(1, false, currentSearchQuery || undefined, currentFilter) // Reset to first page after sync
         setSyncing(false)
       }, 2000)
 
@@ -221,7 +269,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
           </svg>
           <p className="text-glass">Failed to load emails</p>
           <button
-            onClick={fetchEmails}
+            onClick={() => fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)}
             className="glass-button text-glass px-4 py-2 rounded-lg mt-4 text-sm"
           >
             Try Again
@@ -238,7 +286,16 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <h2 className="text-xl font-semibold text-glass">
-              {currentSearchQuery ? 'Search Results' : 'Inbox'}
+              {currentSearchQuery ? 'Search Results' :
+               currentFilter === 'all' ? 'All Mail' :
+               currentFilter === 'inbox' ? 'Inbox' :
+               currentFilter === 'important' ? 'Important' :
+               currentFilter === 'starred' ? 'Starred' :
+               currentFilter === 'sent' ? 'Sent' :
+               currentFilter === 'unread' ? 'Unread' :
+               currentFilter === 'personal' ? 'Personal' :
+               currentFilter === 'updates' ? 'Updates' :
+               currentFilter === 'promotions' ? 'Promotions' : 'Inbox'}
             </h2>
             {searchLoading && (
               <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>

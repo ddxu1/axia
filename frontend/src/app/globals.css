@@ -51,7 +51,6 @@
 
   .glass-button:hover {
     background: rgba(255, 255, 255, 0.15);
-    transform: translateY(-2px);
     box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.4);
   }
 
@@ -80,7 +79,6 @@
   }
 
   .hover-lift:hover {
-    transform: translateY(-4px);
     box-shadow: 0 20px 40px 0 rgba(0, 0, 0, 0.7);
   }
 

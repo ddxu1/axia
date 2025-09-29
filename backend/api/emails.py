@@ -47,6 +47,56 @@ async def get_emails(
         per_page=per_page
     )
 
+@router.get("/counts")
+async def get_email_counts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get email counts by filter categories for the current user
+    """
+    try:
+        from sqlalchemy import func, and_, String
+
+        # Base query for user's non-trash emails
+        base_query = db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.is_trash == False
+        )
+
+        # All emails count
+        all_count = base_query.count()
+
+        # Unread emails count
+        unread_count = base_query.filter(Email.is_read == False).count()
+
+        # Count emails by label using text search on JSON string
+        inbox_count = base_query.filter(func.cast(Email.labels, String).like('%"INBOX"%')).count()
+        important_count = base_query.filter(func.cast(Email.labels, String).like('%"IMPORTANT"%')).count()
+        starred_count = base_query.filter(func.cast(Email.labels, String).like('%"STARRED"%')).count()
+        sent_count = base_query.filter(func.cast(Email.labels, String).like('%"SENT"%')).count()
+        personal_count = base_query.filter(func.cast(Email.labels, String).like('%"CATEGORY_PERSONAL"%')).count()
+        updates_count = base_query.filter(func.cast(Email.labels, String).like('%"CATEGORY_UPDATES"%')).count()
+        promotions_count = base_query.filter(func.cast(Email.labels, String).like('%"CATEGORY_PROMOTIONS"%')).count()
+
+        return {
+            "all": all_count,
+            "unread": unread_count,
+            "inbox": inbox_count,
+            "important": important_count,
+            "starred": starred_count,
+            "sent": sent_count,
+            "personal": personal_count,
+            "updates": updates_count,
+            "promotions": promotions_count
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get email counts: {str(e)}"
+        )
+
 @router.get("/{email_id}", response_model=EmailResponse)
 async def get_email(
     email_id: int,
@@ -197,7 +247,7 @@ async def sync_emails(
         )
 
 @router.get("/debug/counts")
-async def get_email_counts(
+async def get_email_counts_debug(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

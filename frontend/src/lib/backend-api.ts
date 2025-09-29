@@ -98,6 +98,7 @@ class BackendApiClient {
     search?: string
     is_read?: boolean
     is_archived?: boolean
+    label?: string
   } = {}): Promise<BackendEmailResponse> {
     const queryParams = new URLSearchParams()
 
@@ -106,6 +107,7 @@ class BackendApiClient {
     if (params.search) queryParams.append('search', params.search)
     if (params.is_read !== undefined) queryParams.append('is_read', params.is_read.toString())
     if (params.is_archived !== undefined) queryParams.append('is_archived', params.is_archived.toString())
+    if (params.label) queryParams.append('label', params.label)
 
     const query = queryParams.toString()
     const endpoint = `/emails${query ? `?${query}` : ''}`
@@ -174,6 +176,13 @@ class BackendApiClient {
       method: 'POST',
       body: JSON.stringify(emailData),
     })
+  }
+
+  /**
+   * Get email counts by filter categories
+   */
+  async getEmailCounts(): Promise<Record<string, number>> {
+    return this.request<Record<string, number>>('/emails/counts')
   }
 
   /**

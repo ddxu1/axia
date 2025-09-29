@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const per_page = parseInt(url.searchParams.get('per_page') || '50')
     const search = url.searchParams.get('search') || undefined
     const is_read = url.searchParams.get('is_read') ? url.searchParams.get('is_read') === 'true' : undefined
+    const label = url.searchParams.get('label') || undefined
 
     // Use backend JWT from session (multi-user) or fallback to environment
     const backendJwt = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       per_page,
       search,
       is_read,
+      label,
     })
 
     // Convert backend emails to frontend format

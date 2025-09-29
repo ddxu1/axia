@@ -105,7 +105,7 @@ export default function LabelManager({ emailId, currentLabels, onLabelsUpdate, o
           <h3 className="text-lg font-semibold text-glass">Manage Labels</h3>
           <button
             onClick={onClose}
-            className="glass-button text-glass p-2 rounded-full hover:scale-105 transition-all duration-300"
+            className="glass-button text-glass p-2 rounded-full transition-all duration-300"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
