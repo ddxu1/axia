@@ -6,13 +6,20 @@ import { Email } from '@/types/email'
 
 function formatEmailDate(date: Date): string {
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+
+  // Get the start of today in local timezone for accurate day comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const emailDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+  // Calculate difference in days using date objects (not milliseconds)
+  const diffMs = today.getTime() - emailDate.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
   const timeOptions: Intl.DateTimeFormatOptions = {
     hour: 'numeric',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone // Use user's local timezone
   }
 
   const timeStr = date.toLocaleTimeString('en-US', timeOptions).toLowerCase()
@@ -23,7 +30,8 @@ function formatEmailDate(date: Date): string {
     return `Yesterday, ${timeStr}`
   } else if (diffDays < 7) {
     const dayOptions: Intl.DateTimeFormatOptions = {
-      weekday: 'long'
+      weekday: 'long',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
     }
     const dayStr = date.toLocaleDateString('en-US', dayOptions)
     return `${dayStr}, ${timeStr}`
@@ -33,7 +41,8 @@ function formatEmailDate(date: Date): string {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
     })
   }
 }
@@ -60,10 +69,18 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
   const [currentSearchQuery, setCurrentSearchQuery] = useState<string>('')
   const [searchLoading, setSearchLoading] = useState(false)
   const [currentFilter, setCurrentFilter] = useState<string>('all')
+  const [autoSyncing, setAutoSyncing] = useState(false)
+  const [lastAutoSync, setLastAutoSync] = useState<number>(0)
 
   useEffect(() => {
     if (session) {
-      fetchEmails(1, false, undefined, currentFilter)
+      fetchEmails(1, false, undefined, currentFilter).then(() => {
+        // Auto-sync after initial load with rate limiting (max once per 5 minutes)
+        const now = Date.now()
+        if (now - lastAutoSync > 5 * 60 * 1000) { // 5 minutes in milliseconds
+          triggerAutoSync()
+        }
+      })
     }
   }, [session])
 
@@ -190,6 +207,41 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
     setCurrentPage(nextPage)
   }
 
+  const triggerAutoSync = async () => {
+    try {
+      setAutoSyncing(true)
+      setLastAutoSync(Date.now())
+
+      // Trigger sync in backend (silent background operation)
+      const syncResponse = await fetch('/api/emails/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!syncResponse.ok) {
+        console.warn('Auto-sync failed to start:', syncResponse.statusText)
+        return
+      }
+
+      // Wait a moment for sync to process, then quietly refresh emails
+      setTimeout(async () => {
+        try {
+          await fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)
+        } catch (error) {
+          console.warn('Auto-sync email refresh failed:', error)
+        } finally {
+          setAutoSyncing(false)
+        }
+      }, 3000) // 3 seconds for auto-sync
+
+    } catch (err) {
+      console.warn('Auto-sync failed:', err)
+      setAutoSyncing(false)
+    }
+  }
+
   const syncEmails = async () => {
     try {
       setSyncing(true)
@@ -302,10 +354,11 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <div className={`w-2 h-2 rounded-full ${autoSyncing ? 'bg-blue-400 animate-pulse' : 'bg-green-400'} animate-pulse`}></div>
             <span className="text-sm text-glass opacity-80">
               {emails.length} of {totalEmails} emails
               {currentSearchQuery && ` matching "${currentSearchQuery}"`}
+              {autoSyncing && <span className="text-blue-300 ml-1">(syncing)</span>}
             </span>
           </div>
         </div>

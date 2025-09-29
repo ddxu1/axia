@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_serializer
 from datetime import datetime
 from typing import Optional, List, Any
+import pytz
 
 class EmailBase(BaseModel):
     subject: Optional[str] = None
@@ -25,6 +26,16 @@ class EmailResponse(EmailBase):
     sent_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
     created_at: datetime
+
+    @field_serializer('sent_at', 'received_at', 'created_at')
+    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        # If datetime is naive (no timezone), assume it's UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        # Convert to ISO format with timezone info
+        return dt.isoformat()
 
     class Config:
         from_attributes = True
