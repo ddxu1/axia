@@ -8,7 +8,9 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send'
+          scope: 'openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send',
+          prompt: 'consent',
+          access_type: 'offline'
         }
       }
     })
@@ -17,6 +19,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token
+        token.refreshToken = account.refresh_token
       }
       return token
     },
@@ -32,7 +35,8 @@ export const authOptions: NextAuthOptions = {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              google_access_token: token.accessToken
+              google_access_token: token.accessToken,
+              google_refresh_token: token.refreshToken
             }),
           })
 

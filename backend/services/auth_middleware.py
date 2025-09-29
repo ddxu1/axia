@@ -77,7 +77,7 @@ async def get_current_user(
 
     return user
 
-def get_user_from_google_token(google_token: str, db: Session) -> tuple[User, bool]:
+def get_user_from_google_token(google_token: str, db: Session, refresh_token: str = None) -> tuple[User, bool]:
     """
     Get or create user from Google access token
     Returns (user, is_new_user)
@@ -115,6 +115,8 @@ def get_user_from_google_token(google_token: str, db: Session) -> tuple[User, bo
         user.google_access_token = google_token
         user.name = name or user.name
         user.picture = picture or user.picture
+        if refresh_token:
+            user.google_refresh_token = refresh_token
         db.commit()
         return user, False
     else:
@@ -125,7 +127,7 @@ def get_user_from_google_token(google_token: str, db: Session) -> tuple[User, bo
             picture=picture,
             is_active=True,
             google_access_token=google_token,
-            google_refresh_token=None  # Will be updated if available
+            google_refresh_token=refresh_token
         )
         db.add(user)
         db.commit()

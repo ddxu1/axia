@@ -15,6 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # New Pydantic models for multi-user authentication
 class GoogleTokenRequest(BaseModel):
     google_access_token: str
+    google_refresh_token: str = None
 
 class MultiUserAuthResponse(BaseModel):
     access_token: str
@@ -137,7 +138,7 @@ async def google_token_auth(
     """
     try:
         # Get or create user from Google token
-        user, is_new_user = get_user_from_google_token(request.google_access_token, db)
+        user, is_new_user = get_user_from_google_token(request.google_access_token, db, request.google_refresh_token)
 
         # Create JWT token for our backend
         access_token = create_access_token(user.id)
