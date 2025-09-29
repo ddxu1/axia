@@ -6,7 +6,9 @@ export interface Email {
   to: string[]
   date: Date
   snippet: string
-  body: string
+  body: string // Legacy field - keep for backward compatibility
+  body_text?: string
+  body_html?: string
   isRead: boolean
   labels: string[]
 }

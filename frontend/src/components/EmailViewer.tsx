@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Email } from '@/types/email'
 import LabelManager from './LabelManager'
 import ComposeEmail from './ComposeEmail'
+import EmailRenderer from './EmailRenderer'
 
 interface EmailViewerProps {
   email: Email | null
@@ -152,11 +153,11 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
 
       {/* Email Content */}
       <div className="flex-1 p-6 overflow-y-auto">
-        <div className="glass rounded-xl p-6">
-          <div className="whitespace-pre-wrap text-glass leading-relaxed">
-            {email.body || email.snippet}
-          </div>
-        </div>
+        <EmailRenderer
+          bodyHtml={email.body_html}
+          bodyText={email.body_text || email.body}
+          className="h-full"
+        />
       </div>
 
       {/* Action Bar */}
@@ -258,7 +259,7 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
           replyTo={{
             email: email.from.replace(/.*<(.+)>.*/, '$1').trim() || email.from,
             subject: email.subject,
-            body: email.body || email.snippet
+            body: email.body_text || email.body || email.snippet
           }}
           onClose={() => setShowCompose(false)}
         />
@@ -270,7 +271,7 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
           replyTo={{
             email: '',
             subject: `Fwd: ${email.subject}`,
-            body: `<br><br>---------- Forwarded message ----------<br>From: ${email.from}<br>Date: ${new Date(email.date).toLocaleString()}<br>Subject: ${email.subject}<br>To: ${email.to.join(', ')}<br><br>${email.body || email.snippet}`
+            body: `<br><br>---------- Forwarded message ----------<br>From: ${email.from}<br>Date: ${new Date(email.date).toLocaleString()}<br>Subject: ${email.subject}<br>To: ${email.to.join(', ')}<br><br>${email.body_text || email.body || email.snippet}`
           }}
           isForward={true}
           onClose={() => setShowForward(false)}
