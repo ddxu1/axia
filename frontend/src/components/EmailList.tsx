@@ -42,14 +42,22 @@ interface EmailListProps {
   onEmailSelect: (email: Email) => void
   emails?: Email[]
   onEmailsUpdate?: (emails: Email[]) => void
+  searchQuery?: string
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalEmails, setTotalEmails] = useState(0)
+  const [hasMoreEmails, setHasMoreEmails] = useState(true)
+  const [currentSearchQuery, setCurrentSearchQuery] = useState<string>('')
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
     if (session) {
@@ -63,20 +71,103 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
     }
   }, [propEmails])
 
-  const fetchEmails = async () => {
+  // Debounced search effect
+  useEffect(() => {
+    if (searchQuery !== currentSearchQuery) {
+      const timeoutId = setTimeout(() => {
+        if (session) {
+          setCurrentSearchQuery(searchQuery || '')
+          // Reset pagination and fetch new results
+          setCurrentPage(1)
+          setHasMoreEmails(true)
+          fetchEmails(1, false, searchQuery || undefined)
+        }
+      }, 300) // 300ms debounce
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [searchQuery, currentSearchQuery, session])
+
+  const fetchEmails = async (page: number = 1, append: boolean = false, search?: string) => {
     try {
-      setLoading(true)
-      const response = await fetch('/api/emails')
+      if (!append) {
+        if (search) setSearchLoading(true)
+        else setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: '50'
+      })
+
+      if (search) {
+        params.append('search', search)
+      }
+
+      const response = await fetch(`/api/emails?${params}`)
       if (!response.ok) {
         throw new Error('Failed to fetch emails')
       }
       const data = await response.json()
-      setEmails(data.emails)
-      onEmailsUpdate?.(data.emails)
+
+      if (append) {
+        // Append new emails to existing list
+        const newEmails = [...emails, ...data.emails]
+        setEmails(newEmails)
+        onEmailsUpdate?.(newEmails)
+      } else {
+        // Replace emails list
+        setEmails(data.emails)
+        onEmailsUpdate?.(data.emails)
+        setCurrentPage(1)
+      }
+
+      setTotalEmails(data.total)
+      setHasMoreEmails(data.emails.length === 50 && emails.length + data.emails.length < data.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
+      setSearchLoading(false)
+    }
+  }
+
+  const loadMoreEmails = async () => {
+    const nextPage = currentPage + 1
+    await fetchEmails(nextPage, true, currentSearchQuery || undefined)
+    setCurrentPage(nextPage)
+  }
+
+  const syncEmails = async () => {
+    try {
+      setSyncing(true)
+      setError(null)
+
+      // Trigger sync in backend
+      const syncResponse = await fetch('/api/emails/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!syncResponse.ok) {
+        throw new Error('Failed to start email sync')
+      }
+
+      // Wait a moment for sync to process, then fetch updated emails
+      setTimeout(async () => {
+        await fetchEmails(1, false) // Reset to first page after sync
+        setSyncing(false)
+      }, 2000)
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sync failed')
+      setSyncing(false)
     }
   }
 
@@ -145,20 +236,35 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       {/* Header */}
       <div className="p-6 border-b border-glass">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-glass">Inbox</h2>
+          <div className="flex items-center space-x-3">
+            <h2 className="text-xl font-semibold text-glass">
+              {currentSearchQuery ? 'Search Results' : 'Inbox'}
+            </h2>
+            {searchLoading && (
+              <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>
+            )}
+          </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-sm text-glass opacity-80">{emails.length} emails</span>
+            <span className="text-sm text-glass opacity-80">
+              {emails.length} of {totalEmails} emails
+              {currentSearchQuery && ` matching "${currentSearchQuery}"`}
+            </span>
           </div>
         </div>
         <button
-          onClick={fetchEmails}
-          className="glass-button text-glass px-3 py-1 rounded-lg mt-3 text-sm flex items-center space-x-2"
+          onClick={syncEmails}
+          disabled={syncing}
+          className={`glass-button text-glass px-3 py-1 rounded-lg mt-3 text-sm flex items-center space-x-2 ${syncing ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Refresh</span>
+          {syncing ? (
+            <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          )}
+          <span>{syncing ? 'Syncing...' : 'Sync'}</span>
         </button>
       </div>
 
@@ -216,6 +322,31 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
             </div>
           </div>
         ))}
+
+        {/* Load More Button */}
+        {hasMoreEmails && !loading && (
+          <div className="p-4 text-center border-b border-glass">
+            <button
+              onClick={loadMoreEmails}
+              disabled={loadingMore}
+              className={`glass-button text-glass px-6 py-3 rounded-lg flex items-center justify-center space-x-2 mx-auto ${loadingMore ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
+            >
+              {loadingMore ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-glass border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading more...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>Load More Emails ({totalEmails - emails.length} remaining)</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -45,7 +45,10 @@ class GmailSyncWorker:
 
     async def sync_user_emails(self, user: User):
         """Sync emails for a specific user"""
-        print(f"📨 Syncing emails for {user.email}")
+        import time
+        start_time = time.time()
+
+        print(f"🚀 === STARTING EMAIL SYNC FOR {user.email} ===")
 
         # Get or create sync state
         sync_state = self.db.query(SyncState).filter(
@@ -54,6 +57,7 @@ class GmailSyncWorker:
         ).first()
 
         if not sync_state:
+            print(f"🆕 Creating new sync state for {user.email}")
             sync_state = SyncState(
                 user_id=user.id,
                 provider="gmail",
@@ -62,11 +66,16 @@ class GmailSyncWorker:
             )
             self.db.add(sync_state)
             self.db.commit()
+        else:
+            print(f"📊 Existing sync state: {sync_state.total_emails_synced} emails synced previously")
 
         try:
             # Check if token is expired and refresh if needed
             if user.google_token_expires_at and user.google_token_expires_at < datetime.utcnow():
+                print(f"🔄 Token expired, refreshing access token")
                 await self.refresh_access_token(user)
+            else:
+                print(f"✅ Access token is valid")
 
             # Sync emails
             new_emails = await self.fetch_new_emails(user, sync_state)
@@ -74,23 +83,40 @@ class GmailSyncWorker:
             if new_emails:
                 await self.store_emails(user.id, new_emails)
                 sync_state.total_emails_synced += len(new_emails)
-                print(f"✅ Synced {len(new_emails)} new emails for {user.email}")
+                print(f"✅ Successfully synced {len(new_emails)} new emails for {user.email}")
+            else:
+                print(f"📭 No new emails found for {user.email}")
 
             # Update sync state
             sync_state.last_sync_at = datetime.utcnow()
             sync_state.next_sync_at = datetime.utcnow() + timedelta(minutes=15)  # Sync every 15 minutes
-            sync_state.last_email_count = len(new_emails)
+            sync_state.last_email_count = len(new_emails) if new_emails else 0
             sync_state.last_error = None
             sync_state.error_count = 0
 
             self.db.commit()
 
+            # Final summary
+            end_time = time.time()
+            duration = end_time - start_time
+            print(f"🎉 === SYNC COMPLETED FOR {user.email} ===")
+            print(f"   • Duration: {duration:.2f} seconds")
+            print(f"   • New emails this sync: {len(new_emails) if new_emails else 0}")
+            print(f"   • Total emails synced ever: {sync_state.total_emails_synced}")
+
         except Exception as e:
+            end_time = time.time()
+            duration = end_time - start_time
+            print(f"💥 === SYNC FAILED FOR {user.email} ===")
+            print(f"   • Duration: {duration:.2f} seconds")
+            print(f"   • Error: {str(e)}")
             await self.log_sync_error(user.id, str(e))
             raise
 
     async def fetch_new_emails(self, user: User, sync_state: SyncState) -> list:
-        """Fetch new emails from Gmail API"""
+        """Fetch new emails from Gmail API with continuation support"""
+        print(f"🔍 Starting email fetch for {user.email}")
+
         # Ensure we have a valid access token (auto-refresh if needed)
         try:
             access_token = self.token_service.ensure_valid_token(user.id)
@@ -103,74 +129,169 @@ class GmailSyncWorker:
             "Content-Type": "application/json"
         }
 
-        # Build query parameters
-        params = {
-            "maxResults": 50,  # Limit for initial sync
-            "q": "in:inbox"  # Only inbox emails for now
-        }
+        all_messages = []
+        page_token = sync_state.last_sync_token
+        page_num = 1
 
-        # If we have a sync token, use it for incremental sync
-        if sync_state.last_sync_token:
-            params["pageToken"] = sync_state.last_sync_token
+        # Continue fetching until no more pages
+        while True:
+            # Build query parameters
+            params = {
+                "maxResults": 500,  # Gmail's maximum per request
+                "q": "in:inbox"  # Only inbox emails for now
+            }
+
+            if page_token:
+                params["pageToken"] = page_token
+                print(f"📄 Page {page_num}: Using pagination token")
+            else:
+                print(f"🆕 Page {page_num}: Starting initial sync (no pagination token)")
+
+            print(f"🔧 Gmail API query params: {params}")
+
+            async with httpx.AsyncClient() as client:
+                # Get list of message IDs
+                print(f"🌐 Calling Gmail API: GET /messages (Page {page_num})")
+                response = await client.get(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+                    headers=headers,
+                    params=params
+                )
+
+                if response.status_code != 200:
+                    print(f"❌ Gmail API error {response.status_code}: {response.text}")
+                    raise Exception(f"Failed to fetch message list: {response.text}")
+
+                data = response.json()
+                messages = data.get("messages", [])
+
+                print(f"📧 Gmail API returned {len(messages)} message IDs on page {page_num}")
+
+                if not messages:
+                    print(f"✅ No messages found on page {page_num}")
+                    break
+
+                all_messages.extend(messages)
+
+                # Check for next page
+                if "nextPageToken" in data:
+                    page_token = data["nextPageToken"]
+                    page_num += 1
+                    print(f"➡️  Found next page token, continuing to page {page_num}")
+                else:
+                    print(f"🏁 No more pages available after page {page_num}")
+                    # Save the last token for incremental syncs
+                    sync_state.last_sync_token = None  # Reset for next sync
+                    break
+
+        print(f"📊 Total messages collected across {page_num} pages: {len(all_messages)}")
+
+        if not all_messages:
+            return []
+
+        # Fetch full message details
+        full_messages = []
+        duplicate_count = 0
+        error_count = 0
+
+        print(f"🔄 Processing {len(all_messages)} messages:")
 
         async with httpx.AsyncClient() as client:
-            # Get list of message IDs
-            response = await client.get(
-                "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-                headers=headers,
-                params=params
-            )
+            for i, message in enumerate(all_messages):
+                message_id = message["id"]
+                print(f"📨 [{i+1}/{len(all_messages)}] Processing message ID: {message_id}")
 
-            if response.status_code != 200:
-                raise Exception(f"Failed to fetch message list: {response.text}")
-
-            data = response.json()
-            messages = data.get("messages", [])
-
-            if not messages:
-                return []
-
-            # Update sync token for next time
-            if "nextPageToken" in data:
-                sync_state.last_sync_token = data["nextPageToken"]
-
-            # Fetch full message details
-            full_messages = []
-            for message in messages:
                 # Check if we already have this email
                 existing = self.db.query(Email).filter(
-                    Email.gmail_id == message["id"],
+                    Email.gmail_id == message_id,
                     Email.user_id == user.id
                 ).first()
 
                 if existing:
-                    continue  # Skip emails we already have
+                    print(f"   ⏩ Skipping - email already exists in database")
+                    duplicate_count += 1
+                    continue
 
-                # Fetch full message
-                msg_response = await client.get(
-                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message['id']}",
-                    headers=headers
-                )
+                try:
+                    # Fetch full message
+                    print(f"   🌐 Fetching full message details from Gmail API")
+                    msg_response = await client.get(
+                        f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
+                        headers=headers
+                    )
 
-                if msg_response.status_code == 200:
-                    full_messages.append(msg_response.json())
+                    if msg_response.status_code == 200:
+                        full_msg = msg_response.json()
+
+                        # Extract basic info for logging
+                        payload = full_msg.get("payload", {})
+                        headers_dict = {h["name"]: h["value"] for h in payload.get("headers", [])}
+                        subject = headers_dict.get("Subject", "(No Subject)")[:50]
+                        from_addr = headers_dict.get("From", "(Unknown Sender)")[:30]
+                        date_str = headers_dict.get("Date", "(No Date)")
+
+                        print(f"   ✅ New email: '{subject}' from '{from_addr}' ({date_str})")
+                        full_messages.append(full_msg)
+                    else:
+                        print(f"   ❌ Failed to fetch message {message_id}: HTTP {msg_response.status_code}")
+                        error_count += 1
+
+                except Exception as e:
+                    print(f"   ❌ Error fetching message {message_id}: {str(e)}")
+                    error_count += 1
+
+            print(f"📊 Final Fetch Summary:")
+            print(f"   • Total pages processed: {page_num}")
+            print(f"   • Total messages found: {len(all_messages)}")
+            print(f"   • New messages to process: {len(full_messages)}")
+            print(f"   • Duplicates skipped: {duplicate_count}")
+            print(f"   • Fetch errors: {error_count}")
 
             return full_messages
 
     async def store_emails(self, user_id: int, gmail_messages: list):
         """Store Gmail messages in local database"""
-        for msg in gmail_messages:
+        if not gmail_messages:
+            print(f"📭 No emails to store")
+            return
+
+        print(f"💾 Storing {len(gmail_messages)} emails in database")
+
+        stored_count = 0
+        error_count = 0
+
+        for i, msg in enumerate(gmail_messages):
+            message_id = msg.get('id', 'unknown')
             try:
+                print(f"   📝 [{i+1}/{len(gmail_messages)}] Parsing and storing message {message_id}")
+
                 email_data = self.parse_gmail_message(msg)
                 email_data["user_id"] = user_id
 
                 email = Email(**email_data)
                 self.db.add(email)
+                stored_count += 1
+
+                # Log key details about stored email
+                subject = email_data.get("subject", "(No Subject)")[:50]
+                from_addr = email_data.get("from_address", "(Unknown)")[:30]
+                sent_at = email_data.get("sent_at", "Unknown Date")
+                print(f"      ✅ Stored: '{subject}' from '{from_addr}' sent {sent_at}")
 
             except Exception as e:
-                print(f"⚠️ Error parsing message {msg.get('id', 'unknown')}: {str(e)}")
+                print(f"   ❌ Error parsing/storing message {message_id}: {str(e)}")
+                error_count += 1
 
-        self.db.commit()
+        try:
+            self.db.commit()
+            print(f"💾 Database commit successful")
+        except Exception as e:
+            print(f"❌ Database commit failed: {str(e)}")
+            raise
+
+        print(f"📊 Storage Summary:")
+        print(f"   • Successfully stored: {stored_count} emails")
+        print(f"   • Storage errors: {error_count} emails")
 
     def parse_gmail_message(self, gmail_msg: dict) -> dict:
         """Parse Gmail API message format into our Email model format"""
@@ -214,7 +335,16 @@ class GmailSyncWorker:
             except:
                 pass
 
-        data["received_at"] = datetime.utcnow()
+        # Use Gmail's internalDate for when Gmail received the email
+        internal_date = gmail_msg.get("internalDate")
+        if internal_date:
+            try:
+                # internalDate is in milliseconds since epoch
+                data["received_at"] = datetime.fromtimestamp(int(internal_date) / 1000)
+            except:
+                data["received_at"] = datetime.utcnow()
+        else:
+            data["received_at"] = datetime.utcnow()
 
         # Parse labels/flags
         labels = gmail_msg.get("labelIds", [])

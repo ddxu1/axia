@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from schemas.email import EmailResponse, EmailList, EmailSend
 from services.email_service import EmailService
 from services.auth_middleware import get_current_user
 from models.user import User
+from models.email import Email
+from sync_worker import GmailSyncWorker
 from typing import Optional
+import asyncio
 
 router = APIRouter(prefix="/emails", tags=["emails"])
 
@@ -160,3 +163,113 @@ async def send_email(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send email: {str(e)}"
         )
+
+@router.post("/sync")
+async def sync_emails(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trigger a manual sync of emails from Gmail for the current user
+    """
+    try:
+        # Add sync task to background tasks
+        background_tasks.add_task(sync_user_emails_task, current_user.id, db)
+
+        return {
+            "message": "Email sync started",
+            "user_email": current_user.email,
+            "status": "syncing"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start sync: {str(e)}"
+        )
+
+@router.get("/debug/counts")
+async def get_email_counts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Debug endpoint to show email counts for current user
+    """
+    try:
+        from sqlalchemy import func
+
+        # Total emails
+        total_emails = db.query(Email).filter(Email.user_id == current_user.id).count()
+
+        # Non-trash emails
+        non_trash_emails = db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.is_trash == False
+        ).count()
+
+        # Unread emails
+        unread_emails = db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.is_read == False
+        ).count()
+
+        # Recent emails (last 10)
+        recent_emails = db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.is_trash == False
+        ).order_by(Email.sent_at.desc()).limit(10).all()
+
+        recent_list = []
+        for email in recent_emails:
+            recent_list.append({
+                "id": email.id,
+                "subject": email.subject[:50] if email.subject else "(No Subject)",
+                "from_address": email.from_address[:30] if email.from_address else "(Unknown)",
+                "sent_at": email.sent_at.isoformat() if email.sent_at else None,
+                "is_read": email.is_read
+            })
+
+        return {
+            "user_email": current_user.email,
+            "user_id": current_user.id,
+            "counts": {
+                "total_emails": total_emails,
+                "non_trash_emails": non_trash_emails,
+                "unread_emails": unread_emails
+            },
+            "recent_emails": recent_list
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get email counts: {str(e)}"
+        )
+
+def sync_user_emails_task(user_id: int, db: Session):
+    """Background task to sync emails for a user"""
+    try:
+        print(f"🔄 Starting manual email sync for user {user_id}")
+
+        # Get the user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            print(f"❌ User {user_id} not found")
+            return
+
+        # Create sync worker and run sync
+        sync_worker = GmailSyncWorker()
+
+        # Run the async sync in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(sync_worker.sync_user_emails(user))
+        loop.close()
+
+        print(f"✅ Manual email sync completed for {user.email}")
+
+    except Exception as e:
+        print(f"❌ Manual sync failed for user {user_id}: {str(e)}")
+    finally:
+        db.close()

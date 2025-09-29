@@ -16,26 +16,6 @@ export default function Home() {
   const [showCompose, setShowCompose] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Filter emails based on search query
-  const filteredEmails = emails.filter(email => {
-    if (!searchQuery.trim()) return true
-
-    const query = searchQuery.toLowerCase()
-    return (
-      email.subject.toLowerCase().includes(query) ||
-      email.from.toLowerCase().includes(query) ||
-      email.snippet.toLowerCase().includes(query) ||
-      email.body?.toLowerCase().includes(query)
-    )
-  })
-
-  // Clear selected email if it's not in filtered results
-  useEffect(() => {
-    if (selectedEmail && !filteredEmails.find(email => email.id === selectedEmail.id)) {
-      setSelectedEmail(null)
-    }
-  }, [filteredEmails, selectedEmail])
-
   const handleEmailUpdate = (emailId: string, updates: Partial<Email>) => {
     setEmails(prevEmails =>
       prevEmails.map(email =>
@@ -91,14 +71,26 @@ export default function Home() {
               <div className="relative w-full max-w-md">
                 <input
                   type="text"
-                  placeholder="Search emails..."
+                  placeholder="Search all emails..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-black/20 text-white placeholder-gray-400 px-4 py-2 rounded-lg border border-white/10 focus:border-white/20 focus:outline-none"
+                  className="w-full bg-black/20 text-white placeholder-gray-400 px-4 py-2 pr-20 rounded-lg border border-white/10 focus:border-white/20 focus:outline-none"
                 />
-                <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 hover:text-white transition-colors"
+                    title="Clear search"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                ) : (
+                  <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                )}
               </div>
             )}
           </div>
@@ -136,8 +128,8 @@ export default function Home() {
           <div className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift">
             <EmailList
               onEmailSelect={setSelectedEmail}
-              emails={filteredEmails}
               onEmailsUpdate={setEmails}
+              searchQuery={searchQuery}
             />
           </div>
 
