@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { GmailService } from '@/lib/gmail'
+import { backendApi } from '@/lib/backend-api'
 
 export async function POST(
   request: NextRequest,
@@ -21,16 +21,23 @@ export async function POST(
 
     const { isRead } = await request.json()
 
-    const gmailService = new GmailService(session.accessToken as string)
-    const success = isRead
-      ? await gmailService.markAsRead(emailId)
-      : await gmailService.markAsUnread(emailId)
+    // Use backend JWT from session (multi-user) or fallback to environment
+    const backendJwt = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
 
-    if (!success) {
-      return NextResponse.json({
-        error: `Failed to mark email as ${isRead ? 'read' : 'unread'}`
-      }, { status: 500 })
+    if (!backendJwt) {
+      return NextResponse.json({ error: 'Backend authentication required' }, { status: 401 })
     }
+
+    backendApi.setJwtToken(backendJwt)
+
+    // Convert string ID to number for backend API
+    const numericEmailId = parseInt(emailId)
+    if (isNaN(numericEmailId)) {
+      return NextResponse.json({ error: 'Invalid email ID' }, { status: 400 })
+    }
+
+    // Update email status in backend database
+    await backendApi.markEmailAsRead(numericEmailId, isRead)
 
     return NextResponse.json({
       success: true,

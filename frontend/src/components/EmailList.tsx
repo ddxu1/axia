@@ -4,6 +4,40 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Email } from '@/types/email'
 
+function formatEmailDate(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }
+
+  const timeStr = date.toLocaleTimeString('en-US', timeOptions).toLowerCase()
+
+  if (diffDays === 0) {
+    return `Today, ${timeStr}`
+  } else if (diffDays === 1) {
+    return `Yesterday, ${timeStr}`
+  } else if (diffDays < 7) {
+    const dayOptions: Intl.DateTimeFormatOptions = {
+      weekday: 'long'
+    }
+    const dayStr = date.toLocaleDateString('en-US', dayOptions)
+    return `${dayStr}, ${timeStr}`
+  } else {
+    // For older emails, use the original format
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+}
+
 interface EmailListProps {
   onEmailSelect: (email: Email) => void
   emails?: Email[]
@@ -152,12 +186,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
                   {email.from.replace(/<.*>/, '').trim() || email.from}
                 </span>
                 <span className="text-xs text-glass opacity-70 ml-2 flex-shrink-0">
-                  {new Date(email.date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {formatEmailDate(new Date(email.date))}
                 </span>
               </div>
 

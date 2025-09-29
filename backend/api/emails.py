@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from schemas.email import EmailResponse, EmailList, EmailSend
 from services.email_service import EmailService
-from services.auth_service import get_current_user
+from services.auth_middleware import get_current_user
 from models.user import User
 from typing import Optional
 

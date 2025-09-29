@@ -6,7 +6,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Unified Email Client',
+  title: 'Axia',
   description: 'A modern email client supporting multiple providers',
 }
 

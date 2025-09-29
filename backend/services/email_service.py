@@ -50,7 +50,7 @@ class EmailService:
         total = query.count()
 
         # Apply pagination and ordering
-        emails = query.order_by(desc(Email.received_at)).offset((page - 1) * per_page).limit(per_page).all()
+        emails = query.order_by(desc(Email.sent_at)).offset((page - 1) * per_page).limit(per_page).all()
 
         return emails, total
 
