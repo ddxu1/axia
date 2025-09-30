@@ -177,9 +177,65 @@ export default function Home() {
     }
   }
 
+  // Helper function to calculate count decrements when an email is removed
+  const calculateCountDecrements = (email: Email): Partial<Record<string, number>> => {
+    const decrements: Partial<Record<string, number>> = {}
+
+    // Always decrement 'all' count
+    decrements.all = -1
+
+    // Decrement 'unread' count if email is unread
+    if (!email.isRead) {
+      decrements.unread = -1
+    }
+
+    // Decrement 'starred' count if email is starred
+    if (email.isStarred) {
+      decrements.starred = -1
+    }
+
+    // Check labels to determine which category counts to decrement
+    if (email.labels.includes('INBOX')) {
+      decrements.inbox = -1
+    }
+    if (email.labels.includes('CATEGORY_PERSONAL')) {
+      decrements.personal = -1
+    }
+    if (email.labels.includes('CATEGORY_UPDATES')) {
+      decrements.updates = -1
+    }
+    if (email.labels.includes('CATEGORY_PROMOTIONS')) {
+      decrements.promotions = -1
+    }
+
+    return decrements
+  }
+
+  // Helper function to update email counts
+  const updateEmailCounts = (decrements: Partial<Record<string, number>>) => {
+    setEmailCounts(prevCounts => {
+      const newCounts = { ...prevCounts }
+      Object.entries(decrements).forEach(([key, value]) => {
+        if (value !== undefined) {
+          newCounts[key] = Math.max(0, (newCounts[key] || 0) + value)
+        }
+      })
+      return newCounts
+    })
+  }
+
   const handleEmailDelete = (emailId: string) => {
     // Find the current index of the email being deleted in filtered emails
     const currentIndex = filteredEmails.findIndex(email => email.id === emailId)
+
+    // Find the email being deleted to calculate count changes
+    const emailToDelete = filteredEmails.find(email => email.id === emailId)
+
+    // Update email counts immediately
+    if (emailToDelete) {
+      const countDecrements = calculateCountDecrements(emailToDelete)
+      updateEmailCounts(countDecrements)
+    }
 
     // Update emails list by removing the deleted email
     setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))
@@ -210,6 +266,15 @@ export default function Home() {
   const handleEmailArchive = (emailId: string) => {
     // Find the current index of the email being archived in filtered emails
     const currentIndex = filteredEmails.findIndex(email => email.id === emailId)
+
+    // Find the email being archived to calculate count changes
+    const emailToArchive = filteredEmails.find(email => email.id === emailId)
+
+    // Update email counts immediately (archiving removes from inbox but not from all)
+    if (emailToArchive) {
+      const countDecrements = calculateCountDecrements(emailToArchive)
+      updateEmailCounts(countDecrements)
+    }
 
     // Update emails list by removing the archived email
     setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))

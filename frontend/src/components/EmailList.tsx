@@ -330,29 +330,43 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
   const handleStarToggle = async (email: Email, event: React.MouseEvent) => {
     event.stopPropagation() // Prevent email selection when clicking star
 
+    const newStarredState = !email.isStarred
+
+    // Optimistic update: immediately update UI
+    const updatedEmails = emails.map(e =>
+      e.id === email.id ? { ...e, isStarred: newStarredState } : e
+    )
+    setEmails(updatedEmails)
+    onEmailsUpdate?.(updatedEmails)
+
     try {
-      const newStarredState = !email.isStarred
+      // Make API call in background
       const response = await fetch(`/api/emails/${email.id}/star`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isStarred: newStarredState })
       })
 
-      if (response.ok) {
-        // If we're viewing starred emails, refetch to ensure the list is accurate
-        if (currentFilter === 'starred') {
-          await fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)
-        } else {
-          // Update local state for other filters
-          const updatedEmails = emails.map(e =>
-            e.id === email.id ? { ...e, isStarred: newStarredState } : e
-          )
-          setEmails(updatedEmails)
-          onEmailsUpdate?.(updatedEmails)
-        }
+      if (!response.ok) {
+        throw new Error('Failed to update star status')
+      }
+
+      // After successful API call, refetch if in starred filter to handle visibility changes
+      if (currentFilter === 'starred') {
+        await fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)
       }
     } catch (error) {
       console.error('Error toggling email star:', error)
+
+      // Rollback optimistic update on failure
+      const revertedEmails = emails.map(e =>
+        e.id === email.id ? { ...e, isStarred: !newStarredState } : e
+      )
+      setEmails(revertedEmails)
+      onEmailsUpdate?.(revertedEmails)
+
+      // Show error message
+      alert('Failed to update star status. Please try again.')
     }
   }
 
