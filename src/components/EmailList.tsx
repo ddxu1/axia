@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Email } from '@/types/email'
 
@@ -8,14 +8,16 @@ interface EmailListProps {
   onEmailSelect: (email: Email) => void
   emails?: Email[]
   onEmailsUpdate?: (emails: Email[]) => void
+  selectedId?: string | null
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, selectedId: propSelectedId }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(propSelectedId || null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const emailRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   useEffect(() => {
     if (session) {
@@ -28,6 +30,23 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       setEmails(propEmails)
     }
   }, [propEmails])
+
+  // Update selectedId from props (for keyboard navigation)
+  useEffect(() => {
+    if (propSelectedId !== undefined) {
+      setSelectedId(propSelectedId)
+    }
+  }, [propSelectedId])
+
+  // Scroll selected email into view when selection changes
+  useEffect(() => {
+    if (selectedId && emailRefs.current[selectedId]) {
+      emailRefs.current[selectedId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      })
+    }
+  }, [selectedId])
 
   const fetchEmails = async () => {
     try {
@@ -133,6 +152,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
         {emails.map((email, index) => (
           <div
             key={email.id}
+            ref={(el) => { emailRefs.current[email.id] = el }}
             className={`
               relative p-4 border-b border-glass cursor-pointer transition-all duration-300
               hover:bg-white/10 hover:backdrop-blur-sm

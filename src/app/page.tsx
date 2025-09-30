@@ -1,20 +1,39 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession, signIn } from 'next-auth/react'
 import AuthButton from '@/components/AuthButton'
 import EmailList from '@/components/EmailList'
 import EmailViewer from '@/components/EmailViewer'
 import ComposeEmail from '@/components/ComposeEmail'
 import Footer from '@/components/Footer'
+import Toast from '@/components/Toast'
+import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp'
 import { Email } from '@/types/email'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 
 export default function Home() {
   const { data: session } = useSession()
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null)
   const [emails, setEmails] = useState<Email[]>([])
   const [showCompose, setShowCompose] = useState(false)
+  const [showReply, setShowReply] = useState(false)
+  const [showForward, setShowForward] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
+  const emailViewerRef = useRef<{
+    handleReply: () => void
+    handleForward: () => void
+    handleArchive: () => void
+    handleToggleRead: () => void
+    handleDelete: () => void
+  } | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type })
+  }
 
   // Filter emails based on search query
   const filteredEmails = emails.filter(email => {
@@ -33,8 +52,85 @@ export default function Home() {
   useEffect(() => {
     if (selectedEmail && !filteredEmails.find(email => email.id === selectedEmail.id)) {
       setSelectedEmail(null)
+      setSelectedIndex(-1)
     }
   }, [filteredEmails, selectedEmail])
+
+  // Update selected index when selected email changes
+  useEffect(() => {
+    if (selectedEmail) {
+      const index = filteredEmails.findIndex(email => email.id === selectedEmail.id)
+      setSelectedIndex(index)
+    } else {
+      setSelectedIndex(-1)
+    }
+  }, [selectedEmail, filteredEmails])
+
+  // Navigation handlers
+  const handleNavigateDown = () => {
+    if (filteredEmails.length === 0) return
+
+    // Stop at bottom instead of wrapping to top
+    if (selectedIndex < filteredEmails.length - 1) {
+      const nextIndex = selectedIndex + 1
+      setSelectedIndex(nextIndex)
+      setSelectedEmail(filteredEmails[nextIndex])
+    }
+  }
+
+  const handleNavigateUp = () => {
+    if (filteredEmails.length === 0) return
+
+    // Stop at top instead of wrapping to bottom
+    if (selectedIndex > 0) {
+      const prevIndex = selectedIndex - 1
+      setSelectedIndex(prevIndex)
+      setSelectedEmail(filteredEmails[prevIndex])
+    }
+  }
+
+  const handleEscape = () => {
+    // Close keyboard help if open
+    if (showKeyboardHelp) {
+      setShowKeyboardHelp(false)
+      return
+    }
+    // Close modals if any are open
+    if (showCompose) {
+      setShowCompose(false)
+      return
+    }
+    if (showReply) {
+      setShowReply(false)
+      return
+    }
+    if (showForward) {
+      setShowForward(false)
+      return
+    }
+    // Deselect email if one is selected
+    if (selectedEmail) {
+      setSelectedEmail(null)
+      setSelectedIndex(-1)
+    }
+  }
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    enabled: !!session,
+    hasSelectedEmail: !!selectedEmail,
+    isModalOpen: showCompose || showReply || showForward || showKeyboardHelp,
+    onCompose: () => setShowCompose(true),
+    onReply: () => emailViewerRef.current?.handleReply(),
+    onForward: () => emailViewerRef.current?.handleForward(),
+    onArchive: () => emailViewerRef.current?.handleArchive(),
+    onToggleRead: () => emailViewerRef.current?.handleToggleRead(),
+    onDelete: () => emailViewerRef.current?.handleDelete(),
+    onNavigateUp: handleNavigateUp,
+    onNavigateDown: handleNavigateDown,
+    onEscape: handleEscape,
+    onShowHelp: () => setShowKeyboardHelp(true),
+  })
 
   const handleEmailUpdate = (emailId: string, updates: Partial<Email>) => {
     setEmails(prevEmails =>
@@ -56,6 +152,9 @@ export default function Home() {
     if (selectedEmail?.id === emailId) {
       setSelectedEmail(null)
     }
+
+    // Show toast notification
+    showToast('Email deleted successfully', 'success')
   }
 
   const handleEmailArchive = (emailId: string) => {
@@ -65,6 +164,9 @@ export default function Home() {
     if (selectedEmail?.id === emailId) {
       setSelectedEmail(null)
     }
+
+    // Show toast notification
+    showToast('Email archived', 'success')
   }
 
   return (
@@ -138,16 +240,20 @@ export default function Home() {
               onEmailSelect={setSelectedEmail}
               emails={filteredEmails}
               onEmailsUpdate={setEmails}
+              selectedId={selectedEmail?.id || null}
             />
           </div>
 
           {/* Email Viewer */}
           <div className="flex-1 glass-card rounded-2xl overflow-hidden hover-lift">
             <EmailViewer
+              ref={emailViewerRef}
               email={selectedEmail}
               onEmailUpdate={handleEmailUpdate}
               onEmailDelete={handleEmailDelete}
               onEmailArchive={handleEmailArchive}
+              onReplyOpen={() => setShowReply(true)}
+              onForwardOpen={() => setShowForward(true)}
             />
           </div>
         </div>
@@ -297,7 +403,55 @@ export default function Home() {
 
       {/* Compose Email Modal */}
       {showCompose && (
-        <ComposeEmail onClose={() => setShowCompose(false)} />
+        <ComposeEmail
+          onClose={() => setShowCompose(false)}
+          wasEmailSelected={!!selectedEmail}
+          onEscapeToBase={() => setSelectedEmail(null)}
+          onEmailSent={() => showToast('Email sent successfully', 'success')}
+        />
+      )}
+
+      {/* Reply Modal */}
+      {showReply && selectedEmail && (
+        <ComposeEmail
+          replyTo={{
+            email: selectedEmail.from.replace(/.*<(.+)>.*/, '$1').trim() || selectedEmail.from,
+            subject: selectedEmail.subject,
+            body: selectedEmail.body || selectedEmail.snippet
+          }}
+          onClose={() => setShowReply(false)}
+          wasEmailSelected={true}
+          onEmailSent={() => showToast('Reply sent successfully', 'success')}
+        />
+      )}
+
+      {/* Forward Modal */}
+      {showForward && selectedEmail && (
+        <ComposeEmail
+          replyTo={{
+            email: '',
+            subject: `Fwd: ${selectedEmail.subject}`,
+            body: `<br><br>---------- Forwarded message ----------<br>From: ${selectedEmail.from}<br>Date: ${new Date(selectedEmail.date).toLocaleString()}<br>Subject: ${selectedEmail.subject}<br>To: ${selectedEmail.to.join(', ')}<br><br>${selectedEmail.body || selectedEmail.snippet}`
+          }}
+          isForward={true}
+          onClose={() => setShowForward(false)}
+          wasEmailSelected={true}
+          onEmailSent={() => showToast('Email forwarded successfully', 'success')}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Keyboard Shortcuts Help */}
+      {showKeyboardHelp && (
+        <KeyboardShortcutsHelp onClose={() => setShowKeyboardHelp(false)} />
       )}
     </main>
   )

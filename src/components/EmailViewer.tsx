@@ -1,22 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useImperativeHandle, forwardRef } from 'react'
 import { Email } from '@/types/email'
 import LabelManager from './LabelManager'
-import ComposeEmail from './ComposeEmail'
 
 interface EmailViewerProps {
   email: Email | null
   onEmailUpdate?: (emailId: string, updates: Partial<Email>) => void
   onEmailDelete?: (emailId: string) => void
   onEmailArchive?: (emailId: string) => void
+  onReplyOpen?: () => void
+  onForwardOpen?: () => void
 }
 
-export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEmailArchive }: EmailViewerProps) {
+export interface EmailViewerHandle {
+  handleReply: () => void
+  handleForward: () => void
+  handleArchive: () => void
+  handleToggleRead: () => void
+  handleDelete: () => void
+}
+
+const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
+  ({ email, onEmailUpdate, onEmailDelete, onEmailArchive, onReplyOpen, onForwardOpen }, ref) => {
   const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
   const [showLabelManager, setShowLabelManager] = useState(false)
-  const [showCompose, setShowCompose] = useState(false)
-  const [showForward, setShowForward] = useState(false)
 
   const handleMarkAsRead = async (markAsRead: boolean) => {
     if (!email) return
@@ -93,6 +101,35 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
   const handleLabelsUpdate = (emailId: string, labels: string[]) => {
     onEmailUpdate?.(emailId, { labels })
   }
+
+  // Expose methods to parent via ref for keyboard shortcuts
+  useImperativeHandle(ref, () => ({
+    handleReply: () => {
+      if (email && onReplyOpen) {
+        onReplyOpen()
+      }
+    },
+    handleForward: () => {
+      if (email && onForwardOpen) {
+        onForwardOpen()
+      }
+    },
+    handleArchive: () => {
+      if (email) {
+        handleArchive()
+      }
+    },
+    handleToggleRead: () => {
+      if (email) {
+        handleMarkAsRead(!email.isRead)
+      }
+    },
+    handleDelete: () => {
+      if (email) {
+        handleDelete()
+      }
+    }
+  }))
   if (!email) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -168,7 +205,7 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => setShowCompose(true)}
+              onClick={() => onReplyOpen?.()}
               className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,7 +214,7 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
               <span>Reply</span>
             </button>
             <button
-              onClick={() => setShowForward(true)}
+              onClick={() => onForwardOpen?.()}
               className="glass-button text-glass px-4 py-2 rounded-lg text-sm flex items-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,31 +292,10 @@ export default function EmailViewer({ email, onEmailUpdate, onEmailDelete, onEma
           onClose={() => setShowLabelManager(false)}
         />
       )}
-
-      {/* Compose Reply Modal */}
-      {showCompose && (
-        <ComposeEmail
-          replyTo={{
-            email: email.from.replace(/.*<(.+)>.*/, '$1').trim() || email.from,
-            subject: email.subject,
-            body: email.body || email.snippet
-          }}
-          onClose={() => setShowCompose(false)}
-        />
-      )}
-
-      {/* Compose Forward Modal */}
-      {showForward && (
-        <ComposeEmail
-          replyTo={{
-            email: '',
-            subject: `Fwd: ${email.subject}`,
-            body: `<br><br>---------- Forwarded message ----------<br>From: ${email.from}<br>Date: ${new Date(email.date).toLocaleString()}<br>Subject: ${email.subject}<br>To: ${email.to.join(', ')}<br><br>${email.body || email.snippet}`
-          }}
-          isForward={true}
-          onClose={() => setShowForward(false)}
-        />
-      )}
     </div>
   )
-}
+})
+
+EmailViewer.displayName = 'EmailViewer'
+
+export default EmailViewer

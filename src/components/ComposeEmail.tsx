@@ -11,9 +11,12 @@ interface ComposeEmailProps {
     body?: string
   }
   isForward?: boolean
+  wasEmailSelected?: boolean
+  onEscapeToBase?: () => void
+  onEmailSent?: () => void
 }
 
-export default function ComposeEmail({ onClose, replyTo, isForward }: ComposeEmailProps) {
+export default function ComposeEmail({ onClose, replyTo, isForward, wasEmailSelected, onEscapeToBase, onEmailSent }: ComposeEmailProps) {
   const [to, setTo] = useState(replyTo?.email || '')
   const [subject, setSubject] = useState(replyTo?.subject || '')
   const [body, setBody] = useState(replyTo?.body || '')
@@ -48,6 +51,9 @@ export default function ComposeEmail({ onClose, replyTo, isForward }: ComposeEma
         throw new Error(errorData.error || 'Failed to send email')
       }
 
+      // Notify parent of successful send
+      onEmailSent?.()
+
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send email')
@@ -62,6 +68,11 @@ export default function ComposeEmail({ onClose, replyTo, isForward }: ComposeEma
       handleSend()
     }
     if (e.key === 'Escape') {
+      // If no email was selected when compose opened, clear selection
+      if (!wasEmailSelected && onEscapeToBase) {
+        onEscapeToBase()
+      }
+      // Always close the modal
       onClose()
     }
   }
