@@ -50,6 +50,11 @@ export function useKeyboardShortcuts({
         return
       }
 
+      // Don't handle shortcuts if modifier keys are pressed (cmd, ctrl, alt, shift)
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return
+      }
+
       // Navigation shortcuts (always available)
       switch (event.key) {
         case 'j':
@@ -91,13 +96,14 @@ export function useKeyboardShortcuts({
             event.preventDefault()
             onToggleRead()
             break
+          case 'd':
+            event.preventDefault()
+            onDelete()
+            break
           case 'Delete':
           case 'Backspace':
-            // Only trigger delete on Delete key, not Backspace to avoid accidents
-            if (event.key === 'Delete') {
-              event.preventDefault()
-              onDelete()
-            }
+            event.preventDefault()
+            onDelete()
             break
         }
       }

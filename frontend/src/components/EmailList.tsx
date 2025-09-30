@@ -53,9 +53,10 @@ interface EmailListProps {
   onEmailsUpdate?: (emails: Email[]) => void
   searchQuery?: string
   selectedFilter?: string
+  selectedId?: string | null
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter, selectedId: propSelectedId }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -119,6 +120,26 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       }
     }
   }, [selectedFilter, currentFilter, session, currentSearchQuery])
+
+  // Sync selected ID with prop (for keyboard navigation)
+  useEffect(() => {
+    if (propSelectedId !== selectedId) {
+      setSelectedId(propSelectedId)
+    }
+  }, [propSelectedId])
+
+  // Scroll selected item into view when selection changes via keyboard
+  useEffect(() => {
+    if (propSelectedId && emails.length > 0) {
+      const emailElement = document.querySelector(`[data-email-id="${propSelectedId}"]`)
+      if (emailElement) {
+        emailElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        })
+      }
+    }
+  }, [propSelectedId, emails])
 
   const mapFilterToLabel = (filter: string): string | undefined => {
     switch (filter) {
@@ -411,6 +432,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
         {emails.map((email, index) => (
           <div
             key={email.id}
+            data-email-id={email.id}
             className={`
               relative p-4 border-b border-glass cursor-pointer transition-all duration-300
               hover:bg-white/10 hover:backdrop-blur-sm
