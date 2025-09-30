@@ -26,6 +26,8 @@ export default function Home() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
   const [selectedFilter, setSelectedFilter] = useState('all')
   const [emailCounts, setEmailCounts] = useState<Record<string, number>>({})
+  const [isUsingKeyboardNavigation, setIsUsingKeyboardNavigation] = useState(false)
+  const keyboardTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const emailViewerRef = useRef<{
     handleReply: () => void
     handleForward: () => void
@@ -98,9 +100,25 @@ export default function Home() {
     }
   }, [selectedEmail, filteredEmails])
 
+  // Keyboard navigation detection
+  const triggerKeyboardNavigation = () => {
+    setIsUsingKeyboardNavigation(true)
+    // Clear existing timeout
+    if (keyboardTimeoutRef.current) {
+      clearTimeout(keyboardTimeoutRef.current)
+    }
+    // Set timeout to reset keyboard mode after 2 seconds of inactivity
+    keyboardTimeoutRef.current = setTimeout(() => {
+      setIsUsingKeyboardNavigation(false)
+    }, 2000)
+  }
+
   // Navigation handlers
   const handleNavigateDown = () => {
     if (filteredEmails.length === 0) return
+
+    // Trigger keyboard navigation mode
+    triggerKeyboardNavigation()
 
     // Stop at bottom instead of wrapping to top
     if (selectedIndex < filteredEmails.length - 1) {
@@ -112,6 +130,9 @@ export default function Home() {
 
   const handleNavigateUp = () => {
     if (filteredEmails.length === 0) return
+
+    // Trigger keyboard navigation mode
+    triggerKeyboardNavigation()
 
     // Stop at top instead of wrapping to bottom
     if (selectedIndex > 0) {
@@ -390,7 +411,10 @@ export default function Home() {
           </div>
 
           {/* Email List Sidebar */}
-          <div className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift">
+          <div
+            className="w-1/3 glass-card rounded-2xl overflow-hidden hover-lift"
+            onMouseMove={() => setIsUsingKeyboardNavigation(false)}
+          >
             <EmailList
               onEmailSelect={setSelectedEmail}
               emails={emails}
@@ -398,6 +422,7 @@ export default function Home() {
               selectedId={selectedEmail?.id || null}
               searchQuery={searchQuery}
               selectedFilter={selectedFilter}
+              isUsingKeyboard={isUsingKeyboardNavigation}
             />
           </div>
 

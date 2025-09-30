@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Email } from '@/types/email'
 
@@ -54,9 +54,10 @@ interface EmailListProps {
   searchQuery?: string
   selectedFilter?: string
   selectedId?: string | null
+  isUsingKeyboard?: boolean
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter, selectedId: propSelectedId }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter, selectedId: propSelectedId, isUsingKeyboard = false }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -370,6 +371,8 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
     }
   }
 
+
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -453,9 +456,9 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
             key={email.id}
             data-email-id={email.id}
             className={`
-              relative p-4 border-b border-glass cursor-pointer transition-all duration-300
-              hover:bg-white/10 hover:backdrop-blur-sm
-              ${selectedId === email.id ? 'bg-white/15 backdrop-blur-sm' : ''}
+              relative p-4 border-b border-glass cursor-pointer
+              ${!isUsingKeyboard ? 'hover:bg-white/10 hover:backdrop-blur-sm' : ''}
+              ${selectedId === email.id ? 'bg-white/15 backdrop-blur-sm border-l-2 border-l-blue-400' : ''}
             `}
             onClick={() => handleEmailSelect(email)}
             style={{ animationDelay: `${index * 50}ms` }}
