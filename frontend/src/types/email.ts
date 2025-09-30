@@ -10,6 +10,7 @@ export interface Email {
   body_text?: string
   body_html?: string
   isRead: boolean
+  isStarred: boolean
   labels: string[]
 }
 

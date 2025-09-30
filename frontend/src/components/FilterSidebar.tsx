@@ -34,10 +34,10 @@ export default function FilterSidebar({ selectedFilter, onFilterChange, emailCou
       color: 'text-glass-dark'
     },
     {
-      id: 'important',
-      label: 'Important',
+      id: 'starred',
+      label: 'Starred',
       icon: '',
-      count: emailCounts.important || 0,
+      count: emailCounts.starred || 0,
       color: 'text-glass-dark'
     },
     {

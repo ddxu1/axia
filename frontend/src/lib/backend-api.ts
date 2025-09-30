@@ -98,6 +98,7 @@ class BackendApiClient {
     search?: string
     is_read?: boolean
     is_archived?: boolean
+    is_starred?: boolean
     label?: string
   } = {}): Promise<BackendEmailResponse> {
     const queryParams = new URLSearchParams()
@@ -107,6 +108,7 @@ class BackendApiClient {
     if (params.search) queryParams.append('search', params.search)
     if (params.is_read !== undefined) queryParams.append('is_read', params.is_read.toString())
     if (params.is_archived !== undefined) queryParams.append('is_archived', params.is_archived.toString())
+    if (params.is_starred !== undefined) queryParams.append('is_starred', params.is_starred.toString())
     if (params.label) queryParams.append('label', params.label)
 
     const query = queryParams.toString()
@@ -139,6 +141,16 @@ class BackendApiClient {
     await this.request(`/emails/${emailId}/archive`, {
       method: 'POST',
       body: JSON.stringify({ archived }),
+    })
+  }
+
+  /**
+   * Star/unstar email
+   */
+  async starEmail(emailId: number, starred: boolean = true): Promise<void> {
+    await this.request(`/emails/${emailId}/star`, {
+      method: 'POST',
+      body: JSON.stringify({ is_starred: starred }),
     })
   }
 
@@ -229,10 +241,10 @@ export function convertBackendEmailToFrontend(backendEmail: BackendEmail): any {
     snippet: backendEmail.snippet || '',
     body: backendEmail.body_html || backendEmail.body_text || '',
     isRead: backendEmail.is_read,
+    isStarred: backendEmail.is_starred,
     labels: backendEmail.labels,
     // Additional backend-specific fields
     isArchived: backendEmail.is_trash, // Use is_trash for archived status
-    isStarred: backendEmail.is_starred,
     gmailId: backendEmail.gmail_id,
   }
 }

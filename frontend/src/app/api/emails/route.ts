@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const per_page = parseInt(url.searchParams.get('per_page') || '50')
     const search = url.searchParams.get('search') || undefined
     const is_read = url.searchParams.get('is_read') ? url.searchParams.get('is_read') === 'true' : undefined
+    const is_starred = url.searchParams.get('is_starred') ? url.searchParams.get('is_starred') === 'true' : undefined
     const label = url.searchParams.get('label') || undefined
 
     // Use backend JWT from session (multi-user) or fallback to environment
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       per_page,
       search,
       is_read,
+      is_starred,
       label,
     })
 

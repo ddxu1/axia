@@ -16,6 +16,9 @@ router = APIRouter(prefix="/emails", tags=["emails"])
 class MarkReadRequest(BaseModel):
     is_read: bool = True
 
+class StarRequest(BaseModel):
+    is_starred: bool = True
+
 @router.get("/", response_model=EmailList)
 async def get_emails(
     page: int = Query(1, ge=1),
@@ -23,6 +26,7 @@ async def get_emails(
     search: Optional[str] = None,
     label: Optional[str] = None,
     is_read: Optional[bool] = None,
+    is_starred: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -37,7 +41,8 @@ async def get_emails(
         per_page=per_page,
         search=search,
         label=label,
-        is_read=is_read
+        is_read=is_read,
+        is_starred=is_starred
     )
 
     return EmailList(
@@ -73,7 +78,8 @@ async def get_email_counts(
         # Count emails by label using text search on JSON string
         inbox_count = base_query.filter(func.cast(Email.labels, String).like('%"INBOX"%')).count()
         important_count = base_query.filter(func.cast(Email.labels, String).like('%"IMPORTANT"%')).count()
-        starred_count = base_query.filter(func.cast(Email.labels, String).like('%"STARRED"%')).count()
+        # Use is_starred field instead of label search for better performance
+        starred_count = base_query.filter(Email.is_starred == True).count()
         sent_count = base_query.filter(func.cast(Email.labels, String).like('%"SENT"%')).count()
         personal_count = base_query.filter(func.cast(Email.labels, String).like('%"CATEGORY_PERSONAL"%')).count()
         updates_count = base_query.filter(func.cast(Email.labels, String).like('%"CATEGORY_UPDATES"%')).count()
@@ -149,6 +155,31 @@ async def mark_email_read(
         )
 
     return {"message": f"Email marked as {'read' if request.is_read else 'unread'}"}
+
+@router.post("/{email_id}/star")
+async def star_email(
+    email_id: int,
+    request: StarRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Star/unstar an email and sync with Gmail
+    """
+    email_service = EmailService(db)
+
+    if request.is_starred:
+        success = await email_service.star_email(email_id, current_user.id)
+    else:
+        success = await email_service.unstar_email(email_id, current_user.id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not found"
+        )
+
+    return {"message": f"Email {'starred' if request.is_starred else 'unstarred'}"}
 
 @router.delete("/{email_id}")
 async def delete_email(

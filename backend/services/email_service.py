@@ -19,7 +19,8 @@ class EmailService:
         per_page: int = 50,
         search: Optional[str] = None,
         label: Optional[str] = None,
-        is_read: Optional[bool] = None
+        is_read: Optional[bool] = None,
+        is_starred: Optional[bool] = None
     ) -> Tuple[List[Email], int]:
         """Get paginated emails for a user with filters"""
 
@@ -42,6 +43,9 @@ class EmailService:
 
         if is_read is not None:
             query = query.filter(Email.is_read == is_read)
+
+        if is_starred is not None:
+            query = query.filter(Email.is_starred == is_starred)
 
         # Don't show trashed emails by default
         query = query.filter(Email.is_trash == False)
@@ -109,6 +113,95 @@ class EmailService:
         self.db.commit()
 
         # TODO: Also archive in Gmail via API
+        return True
+
+    async def star_email(self, email_id: int, user_id: int) -> bool:
+        """Star an email and sync with Gmail"""
+        email = await self.get_user_email(email_id, user_id)
+        if not email:
+            return False
+
+        # Update local database
+        email.is_starred = True
+
+        # Add STARRED label to labels array if not present
+        if email.labels and "STARRED" not in email.labels:
+            email.labels.append("STARRED")
+        elif not email.labels:
+            email.labels = ["STARRED"]
+
+        self.db.commit()
+
+        # Sync with Gmail API
+        try:
+            await self._modify_gmail_labels(email.gmail_id, user_id, add_labels=["STARRED"])
+        except Exception as e:
+            print(f"Failed to star email in Gmail: {str(e)}")
+            # Don't fail the local operation if Gmail sync fails
+
+        return True
+
+    async def unstar_email(self, email_id: int, user_id: int) -> bool:
+        """Unstar an email and sync with Gmail"""
+        email = await self.get_user_email(email_id, user_id)
+        if not email:
+            return False
+
+        # Update local database
+        email.is_starred = False
+
+        # Remove STARRED label from labels array
+        if email.labels and "STARRED" in email.labels:
+            email.labels = [label for label in email.labels if label != "STARRED"]
+
+        self.db.commit()
+
+        # Sync with Gmail API
+        try:
+            await self._modify_gmail_labels(email.gmail_id, user_id, remove_labels=["STARRED"])
+        except Exception as e:
+            print(f"Failed to unstar email in Gmail: {str(e)}")
+            # Don't fail the local operation if Gmail sync fails
+
+        return True
+
+    async def _modify_gmail_labels(
+        self,
+        gmail_id: str,
+        user_id: int,
+        add_labels: Optional[List[str]] = None,
+        remove_labels: Optional[List[str]] = None
+    ) -> bool:
+        """Modify Gmail labels for an email using Gmail API"""
+
+        # Get user's access token
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user or not user.google_access_token:
+            raise ValueError("User not found or no access token")
+
+        # Prepare request payload
+        payload = {}
+        if add_labels:
+            payload["addLabelIds"] = add_labels
+        if remove_labels:
+            payload["removeLabelIds"] = remove_labels
+
+        if not payload:
+            return True  # Nothing to do
+
+        # Call Gmail API
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{gmail_id}/modify"
+        headers = {
+            "Authorization": f"Bearer {user.google_access_token}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to modify Gmail labels: {response.text}")
+
         return True
 
     async def send_email(
