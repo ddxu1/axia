@@ -38,19 +38,24 @@ export async function DELETE(
     // First, get the email details to retrieve the Gmail ID
     const emailDetails = await backendApi.getEmail(numericEmailId)
 
-    // Delete from Gmail first
+    // Parallelize Gmail and backend deletion for better performance
+    const deletionPromises = []
+
+    // Add Gmail deletion to promises if Gmail ID exists
     if (emailDetails.gmail_id) {
       const gmailService = new GmailService(session.accessToken)
-      const gmailDeleted = await gmailService.deleteEmail(emailDetails.gmail_id)
-
-      if (!gmailDeleted) {
-        console.warn(`Failed to delete email from Gmail: ${emailDetails.gmail_id}`)
-        // Continue with backend deletion even if Gmail deletion fails
-      }
+      deletionPromises.push(
+        gmailService.deleteEmail(emailDetails.gmail_id)
+      )
     }
 
-    // Delete email in backend database
-    await backendApi.deleteEmail(numericEmailId)
+    // Add backend deletion to promises
+    deletionPromises.push(
+      backendApi.deleteEmail(numericEmailId)
+    )
+
+    // Execute all deletions in parallel
+    await Promise.all(deletionPromises)
 
     return NextResponse.json({ success: true, message: 'Email deleted successfully' })
   } catch (error) {

@@ -178,11 +178,29 @@ export default function Home() {
   }
 
   const handleEmailDelete = (emailId: string) => {
+    // Find the current index of the email being deleted in filtered emails
+    const currentIndex = filteredEmails.findIndex(email => email.id === emailId)
+
+    // Update emails list by removing the deleted email
     setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))
 
-    // Clear selected email if it's the one being deleted
+    // Select next email if the deleted email was selected
     if (selectedEmail?.id === emailId) {
-      setSelectedEmail(null)
+      // Calculate which email to select next
+      const emailsAfterDeletion = filteredEmails.filter(email => email.id !== emailId)
+
+      if (emailsAfterDeletion.length > 0) {
+        // If there are emails after deletion, select the next one
+        // If we deleted the last email, select the new last email
+        const nextIndex = Math.min(currentIndex, emailsAfterDeletion.length - 1)
+        const nextEmail = emailsAfterDeletion[nextIndex]
+        setSelectedEmail(nextEmail)
+        setSelectedIndex(nextIndex)
+      } else {
+        // No emails left, clear selection
+        setSelectedEmail(null)
+        setSelectedIndex(-1)
+      }
     }
 
     // Show toast notification
@@ -190,11 +208,29 @@ export default function Home() {
   }
 
   const handleEmailArchive = (emailId: string) => {
+    // Find the current index of the email being archived in filtered emails
+    const currentIndex = filteredEmails.findIndex(email => email.id === emailId)
+
+    // Update emails list by removing the archived email
     setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId))
 
-    // Clear selected email if it's the one being archived
+    // Select next email if the archived email was selected
     if (selectedEmail?.id === emailId) {
-      setSelectedEmail(null)
+      // Calculate which email to select next
+      const emailsAfterArchive = filteredEmails.filter(email => email.id !== emailId)
+
+      if (emailsAfterArchive.length > 0) {
+        // If there are emails after archiving, select the next one
+        // If we archived the last email, select the new last email
+        const nextIndex = Math.min(currentIndex, emailsAfterArchive.length - 1)
+        const nextEmail = emailsAfterArchive[nextIndex]
+        setSelectedEmail(nextEmail)
+        setSelectedIndex(nextIndex)
+      } else {
+        // No emails left, clear selection
+        setSelectedEmail(null)
+        setSelectedIndex(-1)
+      }
     }
 
     // Show toast notification

@@ -101,7 +101,6 @@ export function useKeyboardShortcuts({
             onDelete()
             break
           case 'Delete':
-          case 'Backspace':
             event.preventDefault()
             onDelete()
             break

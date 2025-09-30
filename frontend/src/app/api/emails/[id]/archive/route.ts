@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { backendApi } from '@/lib/backend-api'
+import { GmailService } from '@/lib/gmail'
 
 export async function POST(
   request: NextRequest,
@@ -34,8 +35,27 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid email ID' }, { status: 400 })
     }
 
-    // Archive email in backend database
-    await backendApi.archiveEmail(numericEmailId)
+    // First, get the email details to retrieve the Gmail ID
+    const emailDetails = await backendApi.getEmail(numericEmailId)
+
+    // Parallelize Gmail and backend archiving for better performance
+    const archivePromises = []
+
+    // Add Gmail archiving to promises if Gmail ID exists
+    if (emailDetails.gmail_id) {
+      const gmailService = new GmailService(session.accessToken)
+      archivePromises.push(
+        gmailService.archiveEmail(emailDetails.gmail_id)
+      )
+    }
+
+    // Add backend archiving to promises
+    archivePromises.push(
+      backendApi.archiveEmail(numericEmailId)
+    )
+
+    // Execute all archiving operations in parallel
+    await Promise.all(archivePromises)
 
     return NextResponse.json({ success: true, message: 'Email archived successfully' })
   } catch (error) {

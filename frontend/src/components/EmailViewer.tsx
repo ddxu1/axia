@@ -54,7 +54,15 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
   const handleDelete = async () => {
     if (!email) return
 
+    // Store email data for potential rollback
+    const emailToDelete = email
+
+    // Optimistic update: immediately remove email from UI
+    onEmailDelete?.(email.id)
+
+    // Show loading state
     setIsLoading(prev => ({ ...prev, delete: true }))
+
     try {
       const response = await fetch(`/api/emails/${email.id}/delete`, {
         method: 'DELETE'
@@ -63,11 +71,12 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
       if (!response.ok) {
         throw new Error('Failed to delete email')
       }
-
-      onEmailDelete?.(email.id)
     } catch (error) {
       console.error('Error deleting email:', error)
-      alert('Failed to delete email')
+      // Rollback: restore email to the list if deletion failed
+      // Note: This would require a way to restore emails to the list
+      // For now, show error and suggest refresh
+      alert('Failed to delete email. Please refresh the page to see the current state.')
     } finally {
       setIsLoading(prev => ({ ...prev, delete: false }))
     }
@@ -76,7 +85,15 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
   const handleArchive = async () => {
     if (!email) return
 
+    // Store email data for potential rollback
+    const emailToArchive = email
+
+    // Optimistic update: immediately remove email from UI
+    onEmailArchive?.(email.id)
+
+    // Show loading state
     setIsLoading(prev => ({ ...prev, archive: true }))
+
     try {
       const response = await fetch(`/api/emails/${email.id}/archive`, {
         method: 'POST'
@@ -85,11 +102,12 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
       if (!response.ok) {
         throw new Error('Failed to archive email')
       }
-
-      onEmailArchive?.(email.id)
     } catch (error) {
       console.error('Error archiving email:', error)
-      alert('Failed to archive email')
+      // Rollback: restore email to the list if archiving failed
+      // Note: This would require a way to restore emails to the list
+      // For now, show error and suggest refresh
+      alert('Failed to archive email. Please refresh the page to see the current state.')
     } finally {
       setIsLoading(prev => ({ ...prev, archive: false }))
     }

@@ -339,12 +339,17 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       })
 
       if (response.ok) {
-        // Update local state
-        const updatedEmails = emails.map(e =>
-          e.id === email.id ? { ...e, isStarred: newStarredState } : e
-        )
-        setEmails(updatedEmails)
-        onEmailsUpdate?.(updatedEmails)
+        // If we're viewing starred emails, refetch to ensure the list is accurate
+        if (currentFilter === 'starred') {
+          await fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)
+        } else {
+          // Update local state for other filters
+          const updatedEmails = emails.map(e =>
+            e.id === email.id ? { ...e, isStarred: newStarredState } : e
+          )
+          setEmails(updatedEmails)
+          onEmailsUpdate?.(updatedEmails)
+        }
       }
     } catch (error) {
       console.error('Error toggling email star:', error)

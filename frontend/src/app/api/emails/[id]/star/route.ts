@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { backendApi } from '@/lib/backend-api'
+import { GmailService } from '@/lib/gmail'
 
 export async function POST(
   request: NextRequest,
@@ -34,6 +35,20 @@ export async function POST(
     const numericEmailId = parseInt(emailId)
     if (isNaN(numericEmailId)) {
       return NextResponse.json({ error: 'Invalid email ID' }, { status: 400 })
+    }
+
+    // First, get the email details to retrieve the Gmail ID
+    const emailDetails = await backendApi.getEmail(numericEmailId)
+
+    // Update Gmail star status first
+    if (emailDetails.gmail_id) {
+      const gmailService = new GmailService(session.accessToken)
+
+      if (isStarred) {
+        await gmailService.addLabelsToEmail(emailDetails.gmail_id, ['STARRED'])
+      } else {
+        await gmailService.removeLabelsFromEmail(emailDetails.gmail_id, ['STARRED'])
+      }
     }
 
     // Update email star status in backend database

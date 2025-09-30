@@ -11,7 +11,7 @@ export default function KeyboardShortcutsHelp({ onClose }: KeyboardShortcutsHelp
     { key: 'f', description: 'Forward selected email' },
     { key: 'e', description: 'Archive selected email' },
     { key: 'u', description: 'Toggle read/unread status' },
-    { key: 'Delete / Backspace', description: 'Delete selected email' },
+    { key: 'Delete', description: 'Delete selected email' },
     { key: '↑ / k', description: 'Navigate to previous email' },
     { key: '↓ / j', description: 'Navigate to next email' },
     { key: 'Esc', description: 'Close modal or deselect email' },
