@@ -23,7 +23,7 @@ export default function Home() {
   const fetchEmailCounts = async () => {
     if (session) {
       try {
-        const response = await fetch('/api/emails/counts')
+        const response = await fetch('/api/emails/email-counts')
         if (response.ok) {
           const counts = await response.json()
           setEmailCounts(counts)

@@ -19,40 +19,7 @@ class MarkReadRequest(BaseModel):
 class StarRequest(BaseModel):
     is_starred: bool = True
 
-@router.get("/", response_model=EmailList)
-async def get_emails(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=100),
-    search: Optional[str] = None,
-    label: Optional[str] = None,
-    is_read: Optional[bool] = None,
-    is_starred: Optional[bool] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get paginated list of emails for the current user
-    """
-    email_service = EmailService(db)
-
-    emails, total = await email_service.get_user_emails(
-        user_id=current_user.id,
-        page=page,
-        per_page=per_page,
-        search=search,
-        label=label,
-        is_read=is_read,
-        is_starred=is_starred
-    )
-
-    return EmailList(
-        emails=[EmailResponse.from_orm(email) for email in emails],
-        total=total,
-        page=page,
-        per_page=per_page
-    )
-
-@router.get("/counts")
+@router.get("/email-counts")
 async def get_email_counts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -102,6 +69,39 @@ async def get_email_counts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get email counts: {str(e)}"
         )
+
+@router.get("/", response_model=EmailList)
+async def get_emails(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    search: Optional[str] = None,
+    label: Optional[str] = None,
+    is_read: Optional[bool] = None,
+    is_starred: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get paginated list of emails for the current user
+    """
+    email_service = EmailService(db)
+
+    emails, total = await email_service.get_user_emails(
+        user_id=current_user.id,
+        page=page,
+        per_page=per_page,
+        search=search,
+        label=label,
+        is_read=is_read,
+        is_starred=is_starred
+    )
+
+    return EmailList(
+        emails=[EmailResponse.from_orm(email) for email in emails],
+        total=total,
+        page=page,
+        per_page=per_page
+    )
 
 @router.get("/{email_id}", response_model=EmailResponse)
 async def get_email(

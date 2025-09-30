@@ -194,7 +194,7 @@ class BackendApiClient {
    * Get email counts by filter categories
    */
   async getEmailCounts(): Promise<Record<string, number>> {
-    return this.request<Record<string, number>>('/emails/counts')
+    return this.request<Record<string, number>>('/emails/email-counts')
   }
 
   /**
