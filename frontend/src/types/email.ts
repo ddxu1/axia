@@ -1,3 +1,11 @@
+export interface Attachment {
+  id: string
+  filename: string
+  mimeType: string
+  size: number
+  attachmentId?: string // Gmail attachment ID
+}
+
 export interface Email {
   id: string
   threadId: string
@@ -12,6 +20,7 @@ export interface Email {
   isRead: boolean
   isStarred: boolean
   labels: string[]
+  attachments?: Attachment[]
 }
 
 export interface EmailProvider {

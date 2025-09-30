@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 import { OAuth2Client } from 'google-auth-library'
-import { Email } from '@/types/email'
+import { Email, Attachment } from '@/types/email'
 
 export class GmailService {
   private oauth2Client: OAuth2Client
@@ -183,31 +183,77 @@ export class GmailService {
     }
   }
 
-  async sendEmail(to: string, subject: string, htmlBody: string, plainTextBody?: string): Promise<boolean> {
+  async sendEmail(to: string, subject: string, htmlBody: string, plainTextBody?: string, attachments?: { filename: string; mimeType: string; content: string }[]): Promise<boolean> {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
 
     try {
-      // Create the email message
-      const emailLines = [
-        `To: ${to}`,
-        `Subject: ${subject}`,
-        'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="boundary"',
-        '',
-        '--boundary',
-        'Content-Type: text/plain; charset=UTF-8',
-        '',
-        plainTextBody || this.stripHtml(htmlBody),
-        '',
-        '--boundary',
-        'Content-Type: text/html; charset=UTF-8',
-        '',
-        htmlBody,
-        '',
-        '--boundary--'
-      ]
+      let email: string
 
-      const email = emailLines.join('\n')
+      if (attachments && attachments.length > 0) {
+        // Create multipart/mixed message with attachments
+        const boundary = `boundary_${Date.now()}`
+        const messageBoundary = `message_${Date.now()}`
+
+        const emailLines = [
+          `To: ${to}`,
+          `Subject: ${subject}`,
+          'MIME-Version: 1.0',
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          '',
+          `--${boundary}`,
+          `Content-Type: multipart/alternative; boundary="${messageBoundary}"`,
+          '',
+          `--${messageBoundary}`,
+          'Content-Type: text/plain; charset=UTF-8',
+          '',
+          plainTextBody || this.stripHtml(htmlBody),
+          '',
+          `--${messageBoundary}`,
+          'Content-Type: text/html; charset=UTF-8',
+          '',
+          htmlBody,
+          '',
+          `--${messageBoundary}--`,
+        ]
+
+        // Add attachments
+        for (const attachment of attachments) {
+          emailLines.push(
+            `--${boundary}`,
+            `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+            'Content-Transfer-Encoding: base64',
+            `Content-Disposition: attachment; filename="${attachment.filename}"`,
+            '',
+            attachment.content,
+            ''
+          )
+        }
+
+        emailLines.push(`--${boundary}--`)
+        email = emailLines.join('\n')
+      } else {
+        // No attachments, use simple multipart/alternative
+        const emailLines = [
+          `To: ${to}`,
+          `Subject: ${subject}`,
+          'MIME-Version: 1.0',
+          'Content-Type: multipart/alternative; boundary="boundary"',
+          '',
+          '--boundary',
+          'Content-Type: text/plain; charset=UTF-8',
+          '',
+          plainTextBody || this.stripHtml(htmlBody),
+          '',
+          '--boundary',
+          'Content-Type: text/html; charset=UTF-8',
+          '',
+          htmlBody,
+          '',
+          '--boundary--'
+        ]
+        email = emailLines.join('\n')
+      }
+
       const encodedEmail = Buffer.from(email).toString('base64url')
 
       await gmail.users.messages.send({
@@ -235,6 +281,39 @@ export class GmailService {
       .replace(/&amp;/g, '&')
   }
 
+  private extractAttachments(payload: any): Attachment[] {
+    const attachments: Attachment[] = []
+
+    const processPartForAttachments = (part: any) => {
+      // Check if this part is an attachment
+      if (part.filename && part.body?.attachmentId) {
+        attachments.push({
+          id: part.body.attachmentId,
+          filename: part.filename,
+          mimeType: part.mimeType || 'application/octet-stream',
+          size: part.body.size || 0,
+          attachmentId: part.body.attachmentId
+        })
+      }
+
+      // Recursively process nested parts
+      if (part.parts) {
+        part.parts.forEach((nestedPart: any) => {
+          processPartForAttachments(nestedPart)
+        })
+      }
+    }
+
+    // Process all parts in the payload
+    if (payload?.parts) {
+      payload.parts.forEach((part: any) => {
+        processPartForAttachments(part)
+      })
+    }
+
+    return attachments
+  }
+
   private async getEmailDetail(messageId: string): Promise<Email | null> {
     const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
 
@@ -257,14 +336,32 @@ export class GmailService {
       const date = new Date(getHeader('Date'))
 
       let body = ''
-      if (message.payload?.parts) {
-        const textPart = message.payload.parts.find(part => part.mimeType === 'text/plain')
-        if (textPart?.body?.data) {
-          body = Buffer.from(textPart.body.data, 'base64').toString()
+      let body_html = ''
+      let body_text = ''
+
+      // Extract body content from parts
+      const extractBodyFromParts = (parts: any[]) => {
+        for (const part of parts) {
+          if (part.mimeType === 'text/plain' && part.body?.data) {
+            body_text = Buffer.from(part.body.data, 'base64').toString()
+            if (!body) body = body_text
+          } else if (part.mimeType === 'text/html' && part.body?.data) {
+            body_html = Buffer.from(part.body.data, 'base64').toString()
+          } else if (part.parts) {
+            extractBodyFromParts(part.parts)
+          }
         }
+      }
+
+      if (message.payload?.parts) {
+        extractBodyFromParts(message.payload.parts)
       } else if (message.payload?.body?.data) {
         body = Buffer.from(message.payload.body.data, 'base64').toString()
+        body_text = body
       }
+
+      // Extract attachments
+      const attachments = this.extractAttachments(message.payload)
 
       return {
         id: messageId,
@@ -275,11 +372,38 @@ export class GmailService {
         date,
         snippet: message.snippet || '',
         body,
+        body_text,
+        body_html,
         isRead: !(message.labelIds?.includes('UNREAD') || false),
-        labels: message.labelIds || []
+        isStarred: message.labelIds?.includes('STARRED') || false,
+        labels: message.labelIds || [],
+        attachments
       }
     } catch (error) {
       console.error('Error fetching email detail:', error)
+      return null
+    }
+  }
+
+  async getAttachment(messageId: string, attachmentId: string): Promise<{ data: string; size: number } | null> {
+    const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client })
+
+    try {
+      const response = await gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId,
+        id: attachmentId
+      })
+
+      if (response.data.data) {
+        return {
+          data: response.data.data,
+          size: response.data.size || 0
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Error fetching attachment:', error)
       return null
     }
   }

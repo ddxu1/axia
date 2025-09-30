@@ -1,9 +1,16 @@
 'use client'
 
 import { useState, useImperativeHandle, forwardRef } from 'react'
-import { Email } from '@/types/email'
+import { Email, Attachment } from '@/types/email'
 import LabelManager from './LabelManager'
 import EmailRenderer from './EmailRenderer'
+import AttachmentList from './AttachmentList'
+import dynamic from 'next/dynamic'
+
+// Lazy load PdfViewer to reduce initial bundle size
+const PdfViewer = dynamic(() => import('./PdfViewer'), {
+  ssr: false
+})
 
 interface EmailViewerProps {
   email: Email | null
@@ -26,6 +33,7 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
   ({ email, onEmailUpdate, onEmailDelete, onEmailArchive, onReplyOpen, onForwardOpen }, ref) => {
   const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
   const [showLabelManager, setShowLabelManager] = useState(false)
+  const [previewingPdf, setPreviewingPdf] = useState<Attachment | null>(null)
 
   const handleMarkAsRead = async (markAsRead: boolean) => {
     if (!email) return
@@ -215,6 +223,15 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
         />
       </div>
 
+      {/* Attachments */}
+      {email.attachments && email.attachments.length > 0 && (
+        <AttachmentList
+          attachments={email.attachments}
+          emailId={email.id}
+          onPreviewPdf={(attachment) => setPreviewingPdf(attachment)}
+        />
+      )}
+
       {/* Action Bar */}
       <div className="border-t border-glass p-4">
         <div className="flex items-center justify-between">
@@ -305,6 +322,15 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
           currentLabels={email.labels}
           onLabelsUpdate={handleLabelsUpdate}
           onClose={() => setShowLabelManager(false)}
+        />
+      )}
+
+      {/* PDF Viewer Modal */}
+      {previewingPdf && (
+        <PdfViewer
+          attachment={previewingPdf}
+          emailId={email.id}
+          onClose={() => setPreviewingPdf(null)}
         />
       )}
     </div>

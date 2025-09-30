@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import RichTextEditor from './RichTextEditor'
 
 interface ComposeEmailProps {
@@ -16,12 +16,69 @@ interface ComposeEmailProps {
   onEmailSent?: () => void
 }
 
+interface FileAttachment {
+  file: File
+  id: string
+}
+
 export default function ComposeEmail({ onClose, replyTo, isForward, wasEmailSelected, onEscapeToBase, onEmailSent }: ComposeEmailProps) {
   const [to, setTo] = useState(replyTo?.email || '')
   const [subject, setSubject] = useState(replyTo?.subject || '')
   const [body, setBody] = useState(replyTo?.body || '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<FileAttachment[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return
+
+    const newAttachments: FileAttachment[] = []
+    const maxSize = 25 * 1024 * 1024 // 25MB limit per file
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.size > maxSize) {
+        setError(`File "${file.name}" exceeds 25MB limit`)
+        continue
+      }
+      newAttachments.push({
+        file,
+        id: `${Date.now()}-${i}-${file.name}`
+      })
+    }
+
+    setAttachments(prev => [...prev, ...newAttachments])
+  }
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id))
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    handleFileSelect(e.dataTransfer.files)
+  }
 
   const handleSend = async () => {
     if (!to.trim() || !subject.trim() || !body.trim()) {
@@ -33,22 +90,46 @@ export default function ComposeEmail({ onClose, replyTo, isForward, wasEmailSele
     setError(null)
 
     try {
-      const response = await fetch('/api/emails/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to: to.trim(),
-          subject: subject.trim(),
-          htmlBody: body,
-          plainTextBody: body.replace(/<[^>]*>/g, '')
-        })
-      })
+      // If we have attachments, we need to use FormData
+      if (attachments.length > 0) {
+        const formData = new FormData()
+        formData.append('to', to.trim())
+        formData.append('subject', subject.trim())
+        formData.append('htmlBody', body)
+        formData.append('plainTextBody', body.replace(/<[^>]*>/g, ''))
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to send email')
+        attachments.forEach(att => {
+          formData.append('attachments', att.file)
+        })
+
+        const response = await fetch('/api/emails/send', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to send email')
+        }
+      } else {
+        // No attachments, use JSON
+        const response = await fetch('/api/emails/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            to: to.trim(),
+            subject: subject.trim(),
+            htmlBody: body,
+            plainTextBody: body.replace(/<[^>]*>/g, '')
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to send email')
+        }
       }
 
       // Notify parent of successful send
@@ -138,6 +219,80 @@ export default function ComposeEmail({ onClose, replyTo, isForward, wasEmailSele
               placeholder="Type your message here... Use Ctrl+B for bold, Ctrl+I for italic, Ctrl+U for underline"
               className="min-h-[300px]"
             />
+          </div>
+
+          {/* Attachments */}
+          <div>
+            <label className="block text-sm font-medium text-glass-dark mb-2">
+              Attachments
+            </label>
+
+            {/* Drop Zone */}
+            <div
+              className={`glass rounded-lg border-2 border-dashed transition-all ${
+                isDragging ? 'border-blue-400 bg-blue-500/10' : 'border-glass'
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className="p-6 text-center">
+                <svg className="w-10 h-10 text-glass-dark mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v6" />
+                </svg>
+                <p className="text-sm text-glass mb-2">
+                  Drag and drop files here or
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="glass-button text-glass px-4 py-2 rounded-lg text-sm"
+                >
+                  Browse Files
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                  className="hidden"
+                />
+                <p className="text-xs text-glass-dark mt-3">
+                  Maximum file size: 25MB per file
+                </p>
+              </div>
+            </div>
+
+            {/* Attached Files List */}
+            {attachments.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {attachments.map(att => (
+                  <div key={att.id} className="glass rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <svg className="w-5 h-5 text-glass-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <div>
+                        <p className="text-sm text-glass">{att.file.name}</p>
+                        <p className="text-xs text-glass-dark">{formatFileSize(att.file.size)}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAttachment(att.id)}
+                      className="glass-button text-glass p-1.5 rounded hover:bg-red-500/20"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-glass-dark">
+                  Total: {attachments.length} file{attachments.length !== 1 && 's'} ({formatFileSize(attachments.reduce((sum, att) => sum + att.file.size, 0))})
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Error Message */}
