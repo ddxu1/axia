@@ -220,6 +220,7 @@ export default function EmailRenderer({ bodyHtml, bodyText, className = '' }: Em
       <div className="email-content">
         <iframe
           sandbox="allow-same-origin"
+          referrerPolicy="no-referrer"
           style={{
             width: '100%',
             border: 'none',

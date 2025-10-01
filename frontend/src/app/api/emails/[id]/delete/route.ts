@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { backendApi } from '@/lib/backend-api'
 import { GmailService } from '@/lib/gmail'
+import { ConnectedAccountsAPI } from '@/lib/connected-accounts-api'
 
 export async function DELETE(
   request: NextRequest,
@@ -11,7 +11,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session?.accessToken) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -20,42 +20,39 @@ export async function DELETE(
       return NextResponse.json({ error: 'Email ID is required' }, { status: 400 })
     }
 
-    // Use backend JWT from session (multi-user) or fallback to environment
-    const backendJwt = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
+    // Get account ID from query params
+    const url = new URL(request.url)
+    const accountId = url.searchParams.get('accountId')
 
-    if (!backendJwt) {
-      return NextResponse.json({ error: 'Backend authentication required' }, { status: 401 })
+    // Get backend token
+    const backendToken = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
+    const accountsAPI = new ConnectedAccountsAPI(backendToken)
+
+    let accessToken: string
+
+    // If accountId is 'database', we need to find which account owns this email
+    // For now, just use the first connected account's token
+    if (!accountId || accountId === 'database') {
+      const accounts = await accountsAPI.getConnectedAccounts()
+      if (accounts.length === 0) {
+        return NextResponse.json({ error: 'No connected accounts found' }, { status: 404 })
+      }
+      // Use first account (TODO: track which account owns each email)
+      const tokenData = await accountsAPI.getAccountToken(accounts[0].id)
+      accessToken = tokenData.access_token
+    } else {
+      // Get access token for the specific account
+      const tokenData = await accountsAPI.getAccountToken(parseInt(accountId))
+      accessToken = tokenData.access_token
     }
 
-    backendApi.setJwtToken(backendJwt)
+    // Delete email via Gmail API
+    const gmailService = new GmailService(accessToken)
+    const success = await gmailService.deleteEmail(emailId)
 
-    // Convert string ID to number for backend API
-    const numericEmailId = parseInt(emailId)
-    if (isNaN(numericEmailId)) {
-      return NextResponse.json({ error: 'Invalid email ID' }, { status: 400 })
+    if (!success) {
+      return NextResponse.json({ error: 'Failed to delete email' }, { status: 500 })
     }
-
-    // First, get the email details to retrieve the Gmail ID
-    const emailDetails = await backendApi.getEmail(numericEmailId)
-
-    // Parallelize Gmail and backend deletion for better performance
-    const deletionPromises = []
-
-    // Add Gmail deletion to promises if Gmail ID exists
-    if (emailDetails.gmail_id) {
-      const gmailService = new GmailService(session.accessToken)
-      deletionPromises.push(
-        gmailService.deleteEmail(emailDetails.gmail_id)
-      )
-    }
-
-    // Add backend deletion to promises
-    deletionPromises.push(
-      backendApi.deleteEmail(numericEmailId)
-    )
-
-    // Execute all deletions in parallel
-    await Promise.all(deletionPromises)
 
     return NextResponse.json({ success: true, message: 'Email deleted successfully' })
   } catch (error) {

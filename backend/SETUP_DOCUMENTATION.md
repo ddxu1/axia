@@ -236,6 +236,16 @@ The infrastructure supports multiple users, just need to:
 2. Get fresh token from OAuth Playground
 3. Update with: `venv/bin/python update_token.py 'new_token'`
 
+### If pip install fails with pg_config error
+**Error**: `pg_config executable not found` when running `pip install -r requirements.txt`
+
+**Solution**: Install PostgreSQL on your system:
+- **macOS**: `brew install postgresql`
+- **Ubuntu/Debian**: `sudo apt-get install libpq-dev`
+- **Windows**: Install PostgreSQL from postgresql.org
+
+**Note**: Use `pip install -r requirements.txt` (not `-i`)
+
 ---
 
 ## ✅ Success Metrics

@@ -8,6 +8,7 @@ from datetime import datetime
 from api.auth import router as auth_router
 from api.emails import router as emails_router
 from api.direct_auth import router as direct_auth_router
+from api.connected_accounts import router as connected_accounts_router
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(emails_router)
 app.include_router(direct_auth_router)
+app.include_router(connected_accounts_router)
 
 @app.get("/")
 def read_root():

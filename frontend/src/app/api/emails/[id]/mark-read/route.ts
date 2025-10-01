@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { backendApi } from '@/lib/backend-api'
 import { GmailService } from '@/lib/gmail'
+import { ConnectedAccountsAPI } from '@/lib/connected-accounts-api'
 
 export async function POST(
   request: NextRequest,
@@ -11,7 +11,7 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session?.accessToken) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -22,37 +22,38 @@ export async function POST(
 
     const { isRead } = await request.json()
 
-    // Use backend JWT from session (multi-user) or fallback to environment
-    const backendJwt = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
+    // Get account ID from query params
+    const url = new URL(request.url)
+    const accountId = url.searchParams.get('accountId')
 
-    if (!backendJwt) {
-      return NextResponse.json({ error: 'Backend authentication required' }, { status: 401 })
-    }
+    // Get backend token
+    const backendToken = session.backendToken || process.env.NEXT_PUBLIC_BACKEND_JWT_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3NTkyNDA0MjZ9.1Rqmn3ZqEOpnPcmEKXOod4FZLFKv94ylSVv8FoaWeE4'
+    const accountsAPI = new ConnectedAccountsAPI(backendToken)
 
-    backendApi.setJwtToken(backendJwt)
+    let accessToken: string
 
-    // Convert string ID to number for backend API
-    const numericEmailId = parseInt(emailId)
-    if (isNaN(numericEmailId)) {
-      return NextResponse.json({ error: 'Invalid email ID' }, { status: 400 })
-    }
-
-    // First, get the email details to retrieve the Gmail ID
-    const emailDetails = await backendApi.getEmail(numericEmailId)
-
-    // Update Gmail first
-    if (emailDetails.gmail_id) {
-      const gmailService = new GmailService(session.accessToken)
-
-      if (isRead) {
-        await gmailService.markAsRead(emailDetails.gmail_id)
-      } else {
-        await gmailService.markAsUnread(emailDetails.gmail_id)
+    // If accountId is 'database', use first connected account
+    if (!accountId || accountId === 'database') {
+      const accounts = await accountsAPI.getConnectedAccounts()
+      if (accounts.length === 0) {
+        return NextResponse.json({ error: 'No connected accounts found' }, { status: 404 })
       }
+      const tokenData = await accountsAPI.getAccountToken(accounts[0].id)
+      accessToken = tokenData.access_token
+    } else {
+      const tokenData = await accountsAPI.getAccountToken(parseInt(accountId))
+      accessToken = tokenData.access_token
     }
 
-    // Update email status in backend database
-    await backendApi.markEmailAsRead(numericEmailId, isRead)
+    // Update read status via Gmail API
+    const gmailService = new GmailService(accessToken)
+    const success = isRead
+      ? await gmailService.markAsRead(emailId)
+      : await gmailService.markAsUnread(emailId)
+
+    if (!success) {
+      return NextResponse.json({ error: 'Failed to update email read status' }, { status: 500 })
+    }
 
     return NextResponse.json({
       success: true,

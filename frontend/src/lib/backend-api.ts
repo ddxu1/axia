@@ -232,7 +232,7 @@ export const backendApi = new BackendApiClient()
 // Helper function to convert backend email to frontend email format
 export function convertBackendEmailToFrontend(backendEmail: BackendEmail): any {
   return {
-    id: backendEmail.id.toString(), // Convert to string to match frontend
+    id: backendEmail.gmail_id, // Use gmail_id as the ID for consistency
     threadId: backendEmail.thread_id || backendEmail.gmail_id,
     subject: backendEmail.subject,
     from: backendEmail.from_address,
@@ -246,6 +246,9 @@ export function convertBackendEmailToFrontend(backendEmail: BackendEmail): any {
     // Additional backend-specific fields
     isArchived: backendEmail.is_trash, // Use is_trash for archived status
     gmailId: backendEmail.gmail_id,
+    // Set providerId to 'database' to indicate this needs special handling
+    providerId: 'database',
+    providerType: 'gmail'
   }
 }
 

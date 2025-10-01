@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { GmailService } from '@/lib/gmail'
+import { OutlookService } from '@/lib/outlook'
 import { backendApi } from '@/lib/backend-api'
+import { getConnectedAccounts } from '@/lib/accountsStore'
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session?.accessToken) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -67,15 +69,56 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Send email via Gmail API
-    const gmailService = new GmailService(session.accessToken)
-    const success = await gmailService.sendEmail(
-      to,
-      subject,
-      htmlBody,
-      plainTextBody,
-      attachments.length > 0 ? attachments : undefined
-    )
+    // Get provider info from query params for multi-provider support
+    const url = new URL(request.url)
+    const providerId = url.searchParams.get('providerId')
+    const providerType = url.searchParams.get('providerType') as 'gmail' | 'outlook' | null
+
+    let success = false
+
+    // Multi-provider approach: use providerId and providerType if available
+    if (providerId && providerType) {
+      const accounts = getConnectedAccounts(session.user.email)
+      const account = accounts.find(acc => acc.id === providerId)
+
+      if (!account || !account.accessToken) {
+        return NextResponse.json({ error: 'Account not found or no access token' }, { status: 404 })
+      }
+
+      if (providerType === 'gmail') {
+        const gmailService = new GmailService(account.accessToken)
+        success = await gmailService.sendEmail(
+          to,
+          subject,
+          htmlBody,
+          plainTextBody,
+          attachments.length > 0 ? attachments : undefined
+        )
+      } else if (providerType === 'outlook') {
+        const outlookService = new OutlookService(account.accessToken)
+        success = await outlookService.sendEmail(
+          to,
+          subject,
+          htmlBody,
+          plainTextBody,
+          attachments.length > 0 ? attachments : undefined
+        )
+      }
+    } else {
+      // Legacy approach: use session access token (assumes Gmail)
+      if (!session.accessToken) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const gmailService = new GmailService(session.accessToken)
+      success = await gmailService.sendEmail(
+        to,
+        subject,
+        htmlBody,
+        plainTextBody,
+        attachments.length > 0 ? attachments : undefined
+      )
+    }
 
     if (!success) {
       return NextResponse.json({

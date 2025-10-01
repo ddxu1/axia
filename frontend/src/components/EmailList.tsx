@@ -55,9 +55,10 @@ interface EmailListProps {
   selectedFilter?: string
   selectedId?: string | null
   isUsingKeyboard?: boolean
+  selectedAccount?: string
 }
 
-export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter, selectedId: propSelectedId, isUsingKeyboard = false }: EmailListProps) {
+export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsUpdate, searchQuery, selectedFilter, selectedId: propSelectedId, isUsingKeyboard = false, selectedAccount = 'all' }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>(propEmails || [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -73,6 +74,12 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
   const [currentFilter, setCurrentFilter] = useState<string>('all')
   const [autoSyncing, setAutoSyncing] = useState(false)
   const [lastAutoSync, setLastAutoSync] = useState<number>(0)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Track when component is mounted (client-side only)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     if (session) {
@@ -122,6 +129,16 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
     }
   }, [selectedFilter, currentFilter, session, currentSearchQuery])
 
+  // Account change effect
+  useEffect(() => {
+    if (session) {
+      // Reset pagination and fetch new results when account changes
+      setCurrentPage(1)
+      setHasMoreEmails(true)
+      fetchEmails(1, false, currentSearchQuery || undefined, currentFilter)
+    }
+  }, [selectedAccount, session])
+
   // Sync selected ID with prop (for keyboard navigation)
   useEffect(() => {
     if (propSelectedId !== selectedId) {
@@ -135,12 +152,12 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       const emailElement = document.querySelector(`[data-email-id="${propSelectedId}"]`)
       if (emailElement) {
         emailElement.scrollIntoView({
-          behavior: 'smooth',
+          behavior: isUsingKeyboard ? 'instant' : 'smooth',
           block: 'center'
         })
       }
     }
-  }, [propSelectedId, emails])
+  }, [propSelectedId, emails, isUsingKeyboard])
 
   const mapFilterToLabel = (filter: string): string | undefined => {
     switch (filter) {
@@ -197,6 +214,11 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
       // Special handling for starred filter
       if (filter === 'starred' || currentFilter === 'starred') {
         params.append('is_starred', 'true')
+      }
+
+      // Add selected account parameter
+      if (selectedAccount) {
+        params.append('accountId', selectedAccount)
       }
 
       const response = await fetch(`/api/emails?${params}`)
@@ -305,7 +327,10 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
     // Automatically mark as read when selected
     if (!email.isRead) {
       try {
-        const response = await fetch(`/api/emails/${email.id}/mark-read`, {
+        const url = new URL(`/api/emails/${email.id}/mark-read`, window.location.origin)
+        if (email.providerId) url.searchParams.append('accountId', email.providerId)
+
+        const response = await fetch(url.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ isRead: true })
@@ -494,7 +519,7 @@ export default function EmailList({ onEmailSelect, emails: propEmails, onEmailsU
                   </button>
                 </div>
                 <span className="text-xs text-glass opacity-70 ml-2 flex-shrink-0">
-                  {formatEmailDate(new Date(email.date))}
+                  {isMounted ? formatEmailDate(new Date(email.date)) : new Date(email.date).toLocaleDateString()}
                 </span>
               </div>
 

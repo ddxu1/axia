@@ -40,7 +40,10 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
 
     setIsLoading(prev => ({ ...prev, read: true }))
     try {
-      const response = await fetch(`/api/emails/${email.id}/mark-read`, {
+      const url = new URL(`/api/emails/${email.id}/mark-read`, window.location.origin)
+      if (email.providerId) url.searchParams.append('accountId', email.providerId)
+
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isRead: markAsRead })
@@ -72,7 +75,11 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
     setIsLoading(prev => ({ ...prev, delete: true }))
 
     try {
-      const response = await fetch(`/api/emails/${email.id}/delete`, {
+      // Build URL with account ID for multi-account support
+      const url = new URL(`/api/emails/${email.id}/delete`, window.location.origin)
+      if (email.providerId) url.searchParams.append('accountId', email.providerId)
+
+      const response = await fetch(url.toString(), {
         method: 'DELETE'
       })
 
@@ -103,7 +110,10 @@ const EmailViewer = forwardRef<EmailViewerHandle, EmailViewerProps>(
     setIsLoading(prev => ({ ...prev, archive: true }))
 
     try {
-      const response = await fetch(`/api/emails/${email.id}/archive`, {
+      const url = new URL(`/api/emails/${email.id}/archive`, window.location.origin)
+      if (email.providerId) url.searchParams.append('accountId', email.providerId)
+
+      const response = await fetch(url.toString(), {
         method: 'POST'
       })
 
